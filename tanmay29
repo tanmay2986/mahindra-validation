@@ -1,0 +1,3356 @@
+   public TCValidationData validate(Hashtable ht) throws TxnStatus
+    {
+        log.debug("START :: validate()");
+        TCValidationData udTCValidationData = new TCValidationData();
+        txnStatus = new TxnStatus();
+        Connection objConn = (Connection) ht.get("connection");
+        String retVal = null;
+        String errMsg = null;
+        String procName = null;
+        String strSql = null;
+        PreparedStatement pstmt = null;
+        PreparedStatement pstmt1 = null;
+        ResultSet rs = null;
+        ResultSet rs1 = null;
+        Hashtable outPut = null;
+        CallableStatement cStmt = null;
+        PreparedStatement cstmt = null;
+        String hvFlag = null;
+        String intnalFndTnfr = null;
+        String strAttribute = null;
+        String strCommonAttribute = null;
+        String productCode = (String) ht.get("10000501");
+        String clientCode = (String) ht.get("10000504");
+        String batchNmbr = (String) ht.get("10000519");
+        String depno = (String) ht.get("10000723");
+        String productTypeCode = (String) (ht.get("producttypeCode"));
+        String strPayCollDetail = null;
+        strCommonAttribute = (String) ht.get(TCConstants.ATTRIBUTE);
+        if (strCommonAttribute.equalsIgnoreCase("66666666"))
+            strAttribute = (String) ht.get(strCommonAttribute);
+        else
+            strAttribute = strCommonAttribute;
+        log.debug("~~~~~~~~~~~~~~START Validate~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+        log.debug("Batch Number ::::" + batchNmbr);
+        log.debug("Deposit Number ::::" + depno);
+        log.debug("Product Code ::::" + productCode);
+        log.debug("Client Code ::::" + clientCode);
+        log.debug("Product Type Code ::::" + productTypeCode);
+        log.debug("Attribute ::::" + strAttribute);
+        log.debug("~~~~~~~~~~~~~~~END Validate~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+        String multiccyFlag = (String) TCICache.getFromCache("MULTICCY");
+        String sysDirectdbt = (String) TCICache.getFromCache("DIRECTDBT");
+        udTCValidationData.setExistential(true);
+        String ccDraweeBranch = null;
+        try
+        {
+            if(strAttribute.equalsIgnoreCase("50002275"))
+            {
+                log.info("Start::Record Reference Validation");
+                String colValue =(String)ht.get(strAttribute);
+                try
+                {
+                    //code started for DUP CHECK FLAG ON CPON.
+                    String dupChkReqFlag = "N";
+                    pstmt1 = null;
+                    pstmt1 = objConn.prepareStatement("SELECT DUP_CHK_REQ_FLAG FROM CPON_PRF_REC_FEATURE_MST WHERE CLIENT_ID = ?");
+                    pstmt1.setString(1, clientCode);
+                    rs1 = pstmt1.executeQuery();
+                    if (rs1.next())
+                    {
+                        dupChkReqFlag = rs1.getString(1);
+                    }
+                    log.debug("DUP_CHK_REQ_FLAG = " + dupChkReqFlag);
+                    //code ended for DUP CHECK FLAG ON CPON.
+                    if ("Y".equals(dupChkReqFlag))
+                    {
+                        cStmt = objConn.prepareCall("{ call p_chk_duplicate_txn(?,?,?,?,?,?,?,?,?)}");
+                        cStmt.setString(1, "C");
+                        cStmt.setString(2, "TCI");
+                        cStmt.setString(3, "N");
+                        cStmt.setString(4, clientCode);
+                        cStmt.setString(5, colValue);
+                        cStmt.setString(6, depno);
+                        cStmt.setString(7, (String) ht.get("10000601"));
+                        cStmt.registerOutParameter(8, Types.VARCHAR);
+                        cStmt.registerOutParameter(9, Types.VARCHAR);
+                        cStmt.execute();
+                        retVal = cStmt.getString(8);
+                        errMsg = cStmt.getString(9);
+                        if (retVal != null)
+                        {
+                            log.error(" p_chk_duplicate_txn procedure returned Error Code " + retVal);
+                            udTCValidationData.addErrorMessage(retVal);
+                            udTCValidationData.addAttribute("50002275", colValue);
+                            return udTCValidationData;
+                        } 
+                    }
+                }
+                catch (SQLException se)
+                {
+                    log.error("SQL exception occurred " + Utilities.getStackTrace(se));
+                }
+                catch (Exception se)
+                {
+                    log.error(Utilities.getStackTrace(se));
+                    log.error(retVal);
+                    txnStatus.addErrMessage(retVal);
+                    throw txnStatus;
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs1);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt1);
+                    com.cashtech.centaur.utils.Utilities.doClose(cStmt);
+                }
+                log.info("End::Record Reference Validation");    
+            }
+            else if (strAttribute.equalsIgnoreCase("10000833"))
+            {
+                String strKey = null;
+                try
+                {
+                    String dealrefHost = (String) TCICache.getFromCache("FXCNTRGET");
+                    if (dealrefHost.equals("N"))
+                    {
+                        log.debug("Validation for 10000833..........." + ht.get("10000833").toString());
+                        cstmt = objConn.prepareStatement("SELECT f.contract_reference, f.contract_name FROM fx_contract_mst f "
+                                        + "WHERE f.contract_reference like ? AND f.valid_flag = 'Y' ");
+                        strKey = (String) ht.get("10000833");
+                        cstmt.setString(1, strKey);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            udTCValidationData.setStrStatus(TCConstants.TRUE);
+                            udTCValidationData.setExistential(true);
+                            udTCValidationData.addAttribute("10000833", rs.getString(1));
+                        }
+                        else
+                        {
+                            udTCValidationData.setStrStatus(TCConstants.TRUE);
+                            udTCValidationData.addAttribute("10000833", "");
+                            udTCValidationData.setExistential(false);
+                            errMsg = "TXA213";
+                            udTCValidationData.addErrorMessage(errMsg);
+                        }
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error(Utilities.getStackTrace(e));
+                    udTCValidationData.setExistential(false);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                    log.error("SQLException : " + e);
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("50002002"))
+            {
+                log.debug("Inside Validation of RACC having attribute id : 50002002");
+                String strRACC = (ht.get("50002002").toString()).trim();
+                String retailClient = null;
+                int temp = 0;
+                try
+                {
+                    pstmt = objConn.prepareStatement("SELECT retail_client FROM client_mst WHERE client_code = ?");
+                    pstmt.setString(1, clientCode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        retailClient = rs.getString(1);
+                    }
+                    else
+                    {
+                        udTCValidationData.addAttribute("50002002", "");
+                        txnStatus.addErrMessage("TX02C3");
+                        udTCValidationData.addErrorMessage("TX02C3");
+                        return udTCValidationData;
+                    }
+                    if ("Y".equals(retailClient))
+                    {
+                        if (strRACC.equals(""))
+                        {
+                            udTCValidationData.addAttribute("50002002", "");
+                            txnStatus.addErrMessage("TX51C0");
+                            udTCValidationData.addErrorMessage("TX51C0");
+                            return udTCValidationData;
+                        }
+                        if ("Y".equals(multiccyFlag))
+                        {
+                            pstmt1 = objConn.prepareStatement(
+                                            "SELECT count(1) FROM currency_mst WHERE ccy_code = ? AND valid_flag = 'Y'");
+                            pstmt1.setString(1, strRACC);
+                            rs1 = pstmt1.executeQuery();
+                            if (rs1.next())
+                            {
+                                temp = rs1.getInt(1);
+                            }
+                            else
+                            {
+                                udTCValidationData.addAttribute("50002002", "");
+                                txnStatus.addErrMessage("G00029");
+                                udTCValidationData.addErrorMessage("G00029");
+                                return udTCValidationData;
+                            }
+                            if (temp == 0)
+                            {
+                                udTCValidationData.addAttribute("50002002", "");
+                                txnStatus.addErrMessage("TX51C1");
+                                udTCValidationData.addErrorMessage("TX51C1");
+                                return udTCValidationData;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        pstmt1 = objConn.prepareStatement(
+                                        "SELECT count(1) FROM currency_mst WHERE	ccy_code = ? AND local_ccy_flag = 'Y'");
+                        pstmt1.setString(1, strRACC);
+                        rs1 = pstmt1.executeQuery();
+                        if (rs.next())
+                        {
+                            temp = rs1.getInt(1);
+                        }
+                        if (temp == 0)
+                        {
+                            udTCValidationData.addAttribute("50002002", "");
+                            txnStatus.addErrMessage("TX51C3");
+                            udTCValidationData.addErrorMessage("TX51C3");
+                            return udTCValidationData;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    udTCValidationData.setExistential(false);
+                    log.error("Exception : " + e);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs1);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt1);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("10001178"))
+            {
+                log.debug("Inside Validation of RBC having attribute id : 10001178");
+                String strRBC = (ht.get("10001178").toString()).trim();
+                log.debug("RBC ::::" + strRBC);
+                String draweeBranchCode = null;
+                try
+                {
+                    if (strRBC == null || strRBC.equals("") || strRBC.trim().equals(""))
+                    {
+                        txnStatus.addErrMessage("TX02C4");
+                        udTCValidationData.addErrorMessage("TX02C4");
+                        udTCValidationData.addAttribute("10001178", "");
+                        return udTCValidationData;
+                    }
+                    pstmt = objConn.prepareStatement("select M.disp_branch_code, M.disp_branch_description "
+                                    + "from dispatch_bank_branch_mst M,dispatch_bank_mst D where M.disp_branch_code = ? "
+                                    + "and d.disp_bank_code = M.disp_bank_code and D.BANK_TYPE_FLAG = 'S' and M.Valid_flag = 'Y'");
+                    pstmt.setString(1, strRBC);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        draweeBranchCode = rs.getString(1);
+                        udTCValidationData.addAttribute("disp_branch_description", rs.getString(2));
+                        udTCValidationData.addAttributeToDisable("disp_branch_description");
+                    }
+                    else
+                    {
+                        txnStatus.addErrMessage("TX02C4");
+                        udTCValidationData.addErrorMessage("TX02C4");
+                        udTCValidationData.addAttribute("10001178", "");
+                        udTCValidationData.addAttribute("disp_branch_description", "");
+                        udTCValidationData.addAttributeToDisable("disp_branch_description");
+                        return udTCValidationData;
+                    }
+                }
+                catch (Exception e)
+                {
+                    udTCValidationData.setExistential(false);
+                    log.error("Exception : " + e);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("10000732")
+                            && !CommonUtils.isCashTxn((String) ht.get("paycolldetailFlag")))
+            {
+                String instNumber = (String) ht.get("10000732");
+                String depoNmber = (String) ht.get("10000723");
+                String strBankCode = (String) ht.get("50000244");
+                if(instNumber != null && strBankCode != null)
+                {
+                    instDuplicateCheck(udTCValidationData,objConn,depoNmber,strBankCode,instNumber,(String) ht.get("10000601"));
+                    String errorMesg = udTCValidationData.getStrErrorMessage();
+                    if(!errorMesg.equals(""))
+                    {
+                        return udTCValidationData;
+                    }
+                }
+                log.debug("Inside Validation of Instrument Number having attribute id : 10000732");
+                String colValue = (String) ht.get(strAttribute);
+                log.debug("colValue :::::" + colValue);
+                if (StringUtils.isEmpty(colValue))
+                {
+                    udTCValidationData.addAttribute("10000732", "");
+                    udTCValidationData.addErrorMessage("TX0207");
+                    return udTCValidationData;
+                }
+                int instrumentLength = colValue.length();
+                int dbInstLength = Integer.parseInt(TCICache.getFromCache("INSTRUMENTLEN").toString());
+                if (instrumentLength > dbInstLength)
+                {
+                    udTCValidationData.addAttribute("10000732", "");
+                    udTCValidationData.addErrorMessage("TX02116");
+                    return udTCValidationData;
+                }
+                if (0 == Integer.parseInt(colValue))
+                {
+                    udTCValidationData.addAttribute("10000732", "");
+                    udTCValidationData.addErrorMessage("TX02I02");
+                    return udTCValidationData;
+                }
+                try
+                {
+                    pstmt = objConn.prepareStatement("select ccy_code,DIRECT_DEBIT_FLAG from product_mst where product_code =?");
+                    pstmt.setString(1, productCode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        String ccyCode = rs.getString(1);
+                        String dealrefHost = "Y";
+                        if (dealrefHost.equals("N"))
+                        {
+                            udTCValidationData.addAttribute("10000545", "1.00");
+                            udTCValidationData.addAttributeToDisable("10000545");
+                        }
+                        String retailClient = null;
+                        pstmt1 = objConn.prepareStatement("SELECT retail_client FROM client_mst WHERE client_code = ?");
+                        pstmt1.setString(1, clientCode);
+                        rs1 = pstmt1.executeQuery();
+                        if (rs1.next())
+                        {
+                            retailClient = rs1.getString(1);
+                        }
+                        if (retailClient.equals("N"))
+                        {
+                            udTCValidationData.addAttribute("10001115", "");
+                            udTCValidationData.addAttribute("10001178", "");
+                            udTCValidationData.addAttribute("50002002", "");
+                            udTCValidationData.addAttributeToDisable("10001115");
+                            udTCValidationData.addAttributeToDisable("10001178");
+                            udTCValidationData.addAttributeToDisable("50002002");
+                            udTCValidationData.addAttributeToDisable("seek_10001178");
+                            udTCValidationData.addAttributeToDisable("seek_50002002");
+                        }
+                        if (retailClient.equals("Y"))
+                        {
+                            udTCValidationData.addAttributeToEnable("10001115");
+                            udTCValidationData.addAttributeToEnable("10001178");
+                            udTCValidationData.addAttributeToEnable("50002002");
+                            udTCValidationData.addMandatoryType("10001115", "true");
+                            udTCValidationData.addMandatoryType("10001178", "true");
+                            udTCValidationData.addMandatoryType("50002002", "true");
+                            udTCValidationData.addAttributeToEnable("seek_10001178");
+                            udTCValidationData.addAttributeToEnable("seek_50002002");
+                            udTCValidationData.addAttribute("10001115", "");
+                            udTCValidationData.addAttribute("10001178", "");
+                            udTCValidationData.addAttribute("50002002", "");
+                        }
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("G00051");
+                        return udTCValidationData;
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error("XXXX99@SQLException occured | during Validation of instrument Number in "
+                                    + Utilities.getStackTrace(e));
+                    txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+                    throw txnStatus;
+                }
+                catch (NullPointerException e)
+                {
+                    log.error("XXXX99@NullPointerException occured |during Validation of instrument Number in "
+                                    + Utilities.getStackTrace(e));
+                    txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+                    throw txnStatus;
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs1);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt1);
+                }
+                log.debug("$$$$$$$$$$$$$$$$$$$$$$$$$$$$End Inst No$$$$$$$$$$$$$$$$$$$$$$$");
+            }
+            else if (strAttribute.equalsIgnoreCase("50000246"))
+            {
+                log.debug("Got Values from HT");
+                String validflag = (String) ht.get("validflag");
+                log.debug("Inside Valid Flag : " + validflag);
+                cStmt = null;
+                cstmt = null;
+                String strDraweeBankCode = (String) ht.get("50000244");
+                String strKey = (String) ht.get("50000246");
+                String str127 = (String) ht.get("50000127");
+                String str531 = (String) ht.get("10000531");
+                String str532 = (String) ht.get("10000532");
+                String strClearingLocCode = null;
+                String errorMsg = null;
+                try
+                {
+                	pstmt = objConn.prepareStatement("select PAY_COLL_DETAIL from product_mst where product_code  =?");
+                    pstmt.setString(1, productCode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        strPayCollDetail = rs.getString(1);
+                    }
+                    
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    if(CommonUtils.isCashTxn(strPayCollDetail))
+                    {
+                        pstmt = objConn.prepareStatement(
+                                        "select l.disp_bank_code,l.sys_controlling_branch_code from seller_mst l "
+                                                        + "where l.seller = ? and l.sys_controlling_branch_code=?");
+                        pstmt.setString(1, (String) ActionContext.getContext().getSession().get("SELLERCODE"));
+                        pstmt.setString(2, strKey); 
+                        rs = pstmt.executeQuery();
+                        if (!rs.next())
+                        {
+                            udTCValidationData.addErrorMessage("TX0256");
+                            udTCValidationData.addAttribute("50000246", "");
+                            udTCValidationData.addAttribute("drawee_bank_description", "");
+                            udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                            udTCValidationData.setExistential(false);
+                            return udTCValidationData;
+                        }
+                    }
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                }
+                if (validflag.equals("Y"))
+                {
+                    log.debug("Inside Valid Flag Y");
+                    String suspendedFlag = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement("select suspended_flag from drawee_bank_mst where drawee_bank_code = ?");
+                        cstmt.setString(1, strDraweeBankCode);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            suspendedFlag = rs.getString(1);
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    String bankdesc = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement(
+                                        "select drawee_bank_description from drawee_bank_mst where drawee_bank_code = ?");
+                        cstmt.setString(1, strDraweeBankCode);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            bankdesc = rs.getString(1);
+                        }
+                        else
+                        {
+                            bankdesc = "";
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    String branchdesc = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement(
+                                        "select drawee_branch_description from drawee_bank_branch_mst where drawee_branch_code = ?");
+                        cstmt.setString(1, strKey);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            branchdesc = rs.getString(1);
+                        }
+                        else
+                        {
+                            branchdesc = strKey;
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    log.debug("Calling Proc DRAWEE_BANK_BRANCH_CREATE");
+                    Connection objConns = null;
+                    objConns = (Connection) ht.get("connection");
+                    Timestamp tsMakerDt = Utilities.getApplTimeStamp(objConn);
+                    String strtsMakerDt = DateUtils.sqlTimeStamp2Str(tsMakerDt, "dd/MM/yyyy HH:mm:ss");
+                    log.debug("strDraweeBankCode" + strDraweeBankCode);
+                    log.debug("bankdesc" + bankdesc);
+                    log.debug("suspended_flag" + suspendedFlag);
+                    log.debug("existFlag:R");
+                    log.debug("draweebranch" + strKey);
+                    log.debug("draweebranchdesc" + branchdesc);
+                    log.debug("CLEARINGLOCCODE" + str127);
+                    log.debug("MAKERCODE" + str531);
+                    log.debug("MAKERDATETIME" + strtsMakerDt);
+                    try
+                    {
+                        cStmt = objConns.prepareCall("{call DRAWEE_BANK_BRANCH_CREATE(?,?, ?, ?, ?, ?, ?, ?,?, ?, ?)}");
+                        cStmt.setString(1, strDraweeBankCode);
+                        cStmt.setString(2, bankdesc);
+                        cStmt.setString(3, suspendedFlag);
+                        cStmt.setString(4, "R");
+                        cStmt.setString(5, strKey);
+                        cStmt.setString(6, branchdesc);
+                        cStmt.setString(7, str127);
+                        cStmt.setString(8, str531);
+                        cStmt.setString(9, strtsMakerDt);
+                        cStmt.registerOutParameter(10, Types.VARCHAR);
+                        cStmt.registerOutParameter(11, Types.VARCHAR);
+                        cStmt.execute();
+                        log.debug("check2");
+                        retVal = cStmt.getString(10);
+                        if (cStmt.getString(11) != null)
+                        {
+                            errorMsg = cStmt.getString(11).trim();
+                        }
+                        log.info("retVal" + retVal);
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(cStmt);
+                    }
+                    if (retVal != null)
+                    {
+                        log.debug("Error in Proc");
+                        log.error("Error while Executing Procedure " + procName + "ErrorCode = " + retVal + " :error msg:: "
+                                        + errorMsg);
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        log.debug("Proc Executed Success");
+                        log.error("Procedure executed successfully  " + procName + "ErrorCode = " + retVal);
+                        try
+                        {
+                            cstmt = objConn.prepareStatement("select routing_cd from drawee_bank_branch_mst "
+                                            + "where drawee_branch_code = ? and valid_flag = 'Y'");
+                            cstmt.setString(1, strKey);
+                            rs = cstmt.executeQuery();
+                            if (rs.next())
+                            {
+                                log.debug("Routing Code : " + rs.getString(1));
+                            }
+                            else
+                            {
+                                log.debug("Routing Code : " + "000000000");
+                            }
+                            log.debug("check3");
+                        }
+                        finally
+                        {
+                            com.cashtech.centaur.utils.Utilities.doClose(rs);
+                            com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                        }
+                    }
+                    return udTCValidationData;
+                }
+                String payerAnalysisFlag = null;
+                String drawerDescMandatory = null;
+                String strCheck = "select payer_analysis_flag,DRAWER_DESC_MANDATORY from client_product_mst "
+                                + "where client_code = ? and product_code = ? ";
+                pstmt = objConn.prepareStatement(strCheck);
+                pstmt.setString(1, clientCode);
+                pstmt.setString(2, productCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    payerAnalysisFlag = rs.getString(1);
+                    drawerDescMandatory = rs.getString(2);
+                }
+                log.info("payer_analysis_flag ::::::" + payerAnalysisFlag);
+                log.info("drawer_desc_mandatory ::::::::" + drawerDescMandatory);
+                if (payerAnalysisFlag.equals("Y") || drawerDescMandatory.equalsIgnoreCase("Y"))
+                {
+                    udTCValidationData.addAttribute("MandFlag", "Y");
+                }
+                else
+                {
+                    udTCValidationData.addAttribute("MandFlag", "N");
+                }
+                String retailClient = null;
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                pstmt = objConn.prepareStatement("SELECT retail_client FROM client_mst WHERE client_code = ?");
+                pstmt.setString(1, clientCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    retailClient = rs.getString(1);
+                }
+                if (retailClient.equals("N"))
+                {
+                    udTCValidationData.addAttribute("10001115", "");
+                    udTCValidationData.addAttribute("10001178", "");
+                    udTCValidationData.addAttribute("50002002", "");
+                    udTCValidationData.addAttributeToDisable("10001115");
+                    udTCValidationData.addAttributeToDisable("10001178");
+                    udTCValidationData.addAttributeToDisable("50002002");
+                }
+                if (retailClient.equals("Y"))
+                {
+                    udTCValidationData.addAttributeToEnable("10001115");
+                    udTCValidationData.addAttributeToEnable("10001178");
+                    udTCValidationData.addAttributeToEnable("50002002");
+                    udTCValidationData.addMandatoryType("10001115", "true");
+                    udTCValidationData.addMandatoryType("10001178", "true");
+                    udTCValidationData.addMandatoryType("50002002", "true");
+                    udTCValidationData.addAttribute("10001115", "");
+                    udTCValidationData.addAttribute("10001178", "");
+                    udTCValidationData.addAttribute("50002002", "");
+                }
+                log.debug("Inside Validation of Drawee Branch Code having attribute id : 50000246");
+                String colValue = (String) ht.get(strAttribute);
+                if (colValue == null || colValue.equals("") || colValue.trim().equals(""))
+                {
+                    udTCValidationData.addAttribute("50000246", "");
+                    udTCValidationData.addAttribute("drawer_descriptions", "");
+                    udTCValidationData.addAttributeToDisable("drawer_descriptions");
+                    return udTCValidationData;
+                }
+                String seekId = null;
+                String producttypeCode = null;
+                String clearing = (String) ht.get("50000537");
+                String bankBranchFlag = TCICache.getFromCache("BK_BR_FLAG").toString();
+                String draweeBranchCode = null;
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                pstmt = objConn.prepareStatement("select product_type_code from product_mst where product_code = ?");
+                pstmt.setString(1, productCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    producttypeCode = rs.getString(1);
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                if (bankBranchFlag.equals("B"))
+                {
+                    pstmt = objConn.prepareStatement("select drawee_branch_code,drawee_branch_description, "
+                                    + "drawee_bank_branch_mst.clearing_loc_code from drawee_bank_branch_mst "
+                                    + "where drawee_branch_code like ? and drawee_bank_code like ? and valid_flag = 'Y'");
+                    pstmt.setString(1, colValue);
+                    pstmt.setString(2, (String) ht.get("50000244"));
+                }
+                else
+                {
+                    if (!producttypeCode.equals("O"))
+                    {
+                        String sql = "select drawee_bank_branch_mst.drawee_branch_code, "
+                                        + "drawee_bank_branch_mst.drawee_branch_description,drawee_bank_branch_mst.clearing_loc_code "
+                                        + "from drawee_bank_branch_mst, adhoc_dispatch_bank_txn b "
+                                        + "where drawee_bank_branch_mst.drawee_branch_code like ? "
+                                        + "and drawee_bank_branch_mst.drawee_bank_code like ? "
+                                        + "and b.adhoc_dispatch_bank_code (+) = drawee_bank_branch_mst.drawee_bank_code "
+                                        + "and b.adhoc_dispatch_branch_code (+) = drawee_bank_branch_mst.drawee_branch_code ";
+                        pstmt = objConn.prepareStatement(sql);
+                        pstmt.setString(1, colValue);
+                        pstmt.setString(2, (String) ht.get("50000244"));
+                    }
+                    else
+                    {
+                        pstmt = objConn.prepareStatement("select drawee_bank_branch_mst.drawee_branch_code, "
+                                        + "drawee_bank_branch_mst.drawee_branch_description, "
+                                        + "drawee_bank_branch_mst.clearing_loc_code from drawee_bank_branch_mst, "
+                                        + "adhoc_dispatch_bank_txn b where drawee_bank_branch_mst.drawee_branch_code like ? "
+                                        + "and drawee_bank_branch_mst.drawee_bank_code like ? "
+                                        + "and b.adhoc_dispatch_bank_code (+) = drawee_bank_branch_mst.drawee_bank_code "
+                                        + "and b.adhoc_dispatch_branch_code (+) = drawee_bank_branch_mst.drawee_branch_code "
+                                        + "and (drawee_bank_branch_mst.clearing_loc_code is null "
+                                        + "or drawee_bank_branch_mst.clearing_loc_code in (select clearing_loc_code "
+                                        + "from product_drawnon_loc_mst where product_drawnon_loc_mst.product_code = ?  "
+                                        + "and product_drawnon_loc_mst.valid_flag = 'Y' )) and (valid_flag = 'Y')");
+                        pstmt.setString(1, colValue);
+                        pstmt.setString(2, (String) ht.get("50000244"));
+                        pstmt.setString(3, productCode);
+                    }
+                }
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    log.debug("Valid Drawee Branch Code");
+                    String draweeBranchDescription = rs.getString(2);
+                    strClearingLocCode = rs.getString(3);
+                    udTCValidationData.addAttribute("drawee_branch_description", draweeBranchDescription);
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                    draweeBranchCode = rs.getString(1);
+                }
+                else
+                {
+                    log.debug("InValid Drawee Branch Code");
+                    String strAhdrbkdrbr = TCICache.getFromCache("AHDRBKDRBR").toString();
+                    if ("Y".equalsIgnoreCase(strAhdrbkdrbr))
+                    {
+                        udTCValidationData.addAttribute("50000246", colValue);
+                        udTCValidationData.addErrorMessage("PDV301");
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        udTCValidationData.addAttribute("50000246", "");
+                        udTCValidationData.addAttribute("drawee_bank_description", "");
+                        udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                        udTCValidationData.setExistential(false);
+                        return udTCValidationData;
+                    }
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                log.debug("producttypeCode ::" + producttypeCode);
+                log.debug("clearing ::" + clearing);
+                log.debug("bank_branch_flag ::" + bankBranchFlag);
+                log.debug("productCode ::" + productCode);
+                ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000246", "A");
+                log.debug("Calling procedure dep_chk_drawee_branch");
+                ht.put("50000246", colValue);
+                ht.put("10000501", productCode);
+                outPut = pg.execute(ht, 1);
+                retVal = outPut.get("1001").toString().trim();
+                if (!retVal.equals(""))
+                {
+                    procName = (String) ht.get("procName");
+                    log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                    udTCValidationData.addAttribute("50000246", "");
+                    udTCValidationData.addAttribute("drawee_branch_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                    if (retVal.equals("D"))
+                    {
+                        udTCValidationData.addErrorMessage("TX0241");
+                        return udTCValidationData;
+                    }
+                    if (!retVal.equals("PDV301"))
+                    {
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    if (retVal.equals("PDV301"))
+                    {
+                        udTCValidationData.addAttribute("50000246", colValue);
+                        udTCValidationData.addAttribute("drawee_branch_description", outPut.get("1003").toString().trim());
+                        udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    udTCValidationData.addErrorMessage(retVal);
+                    return udTCValidationData;
+                }
+                String clearingLocCode = null;
+                clearingLocCode = outPut.get("1004").toString().trim();
+                String primaryLocCode = (String) ht.get("50000537");
+                log.debug("clearingLocCode" + clearingLocCode);
+                log.debug("primaryLocCode" + primaryLocCode);
+                udTCValidationData.addAttribute("50000244", outPut.get("1006").toString().trim());
+                log.debug("productTypeCode" + productTypeCode);
+                if ((productTypeCode.equals("B")) || (productTypeCode.equals("N")))
+                {
+                    udTCValidationData.addAttribute("50000127", primaryLocCode);
+                    udTCValidationData.addAttribute("50000537", primaryLocCode);
+                    udTCValidationData.addAttributeToDisable("50000127");
+                    udTCValidationData.addAttributeToDisable("seek_50000127");
+                    udTCValidationData.addAttribute("loc_description", outPut.get("1005").toString().trim());
+                    udTCValidationData.addAttributeToDisable("loc_description");
+                }
+                else if ((!productTypeCode.equals("O")) && (!productTypeCode.equals("B")))
+                {
+                    udTCValidationData.addAttribute("50000127", clearingLocCode);
+                    udTCValidationData.addAttribute("50000537", primaryLocCode);
+                    udTCValidationData.addAttributeToDisable("50000127");
+                    udTCValidationData.addAttribute("loc_description", outPut.get("1005").toString().trim());
+                    udTCValidationData.addAttributeToDisable("loc_description");
+                }
+                else if (productTypeCode.equals("O"))
+                {
+                    PreparedStatement locpstmt = objConn.prepareStatement(
+                                    "select loc_description from clearing_location_mst where  clearing_loc_code = ?");
+                    locpstmt.setString(1, strClearingLocCode);
+                    ResultSet prs = locpstmt.executeQuery();
+                    if (prs.next())
+                    {
+                        String clearingLocCodeDescription = prs.getString("loc_description");
+                        udTCValidationData.addAttribute("50000127", strClearingLocCode);
+                        udTCValidationData.addAttribute("loc_description", clearingLocCodeDescription);
+                        udTCValidationData.addAttributeToDisable("loc_description");
+                    }
+                    com.cashtech.centaur.utils.Utilities.doClose(prs);
+                    com.cashtech.centaur.utils.Utilities.doClose(locpstmt);
+                }
+                else
+                {
+                    if (!clearingLocCode.equals(""))
+                    {
+                        log.debug("calling dep_chk_clearing_location proc");
+                        ht.put("10000504", clientCode);
+                        ht.put("10000501", productCode);
+                        ht.put("50000127", clearingLocCode);
+                        outPut = pg.execute(ht, 2);
+                        retVal = outPut.get("1001").toString().trim();
+                        if (!retVal.equals(""))
+                        {
+                            procName = (String) ht.get("procName");
+                            log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                            if (!retVal.equals("PDV401"))
+                            {
+                                udTCValidationData.addErrorMessage(retVal);
+                                return udTCValidationData;
+                            }
+                        }
+                        ccDraweeBranch = "Y";
+                        udTCValidationData.addAttribute("50000537", clearingLocCode);
+                        udTCValidationData.addAttributeToDisable("loc_description");
+                    }
+                    else
+                    {
+                        ccDraweeBranch = "N";
+                    }
+                }
+                String routingCD = "000000000";
+                udTCValidationData.addAttribute("50000794", routingCD);
+                udTCValidationData.addAttributeToDisable("50000794");
+                try
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    pstmt = objConn.prepareStatement(
+                                    "SELECT NVL(high_value_branch,'N') FROM drawee_bank_branch_mst WHERE drawee_branch_code = ?");
+                    pstmt.setString(1, colValue);
+                    rs = pstmt.executeQuery();
+                    String hvBranch = null;
+                    if (rs.next())
+                    {
+                        hvBranch = rs.getString(1);
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("TX0259");
+                        return udTCValidationData;
+                    }
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    pstmt = objConn.prepareStatement("select get_hv_req_flag(?,?) from dual");
+                    pstmt.setString(1, productCode);
+                    pstmt.setString(2, clearingLocCode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        hvFlag = (rs.getString(1)).trim();
+                        log.debug("After Execution of a function ::hvFlag " + hvFlag);
+                        log.debug("hvFlag :::::::" + hvFlag);
+                    }
+                    String mandateCode = (String) ht.get("50000845");
+                    String drawerCode = (String) ht.get("50000250");
+                    log.debug("mandate_code ::" + mandateCode);
+                    log.debug("drawer_code ::" + drawerCode);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    pstmt = objConn.prepareStatement("SELECT internal_funds_transfer_flag FROM product_mst WHERE product_code = ?");
+                    pstmt.setString(1, productCode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        intnalFndTnfr = rs.getString(1);
+                    }
+                    String strDISPBRANCHCODE = null;
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    if (intnalFndTnfr.equals("Y"))
+                    {
+                        pstmt = objConn.prepareStatement("SELECT DISP_BRANCH_CODE FROM dispatch_bank_branch_mst a "
+                                        + "WHERE DISP_BANK_CODE =(SELECT DISP_BANK_CODE FROM dispatch_bank_mst "
+                                        + "WHERE DISP_BANK_CODE=a.DISP_BANK_CODE  AND BANK_TYPE_FLAG = 'S' AND VALID_FLAG = 'Y') "
+                                        + "AND valid_flag = 'Y' AND DISP_BRANCH_CODE = ?");
+                        pstmt.setString(1, colValue);
+                        rs = pstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            strDISPBRANCHCODE = rs.getString(1);
+                        }
+                        else
+                        {
+                            udTCValidationData.addErrorMessage("TX02C6");
+                            return udTCValidationData;
+                        }
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                }
+                log.debug("$$$$$$$$$$$$$$$$$$$$$$$$$$$$End Drawee Branch Code$$$$$$$$$$$$$$$$$$$$$$$");
+            }
+            else if (strAttribute.equalsIgnoreCase("10000606"))
+            {
+                try
+                {
+                    log.debug("Inside Validation of Instrument Amount having attribute id : 10000606");
+                    BigDecimal instPayAmnt = new BigDecimal((String) ht.get("10000606"));
+                    if (instPayAmnt == null)
+                    {
+                        instPayAmnt = new BigDecimal("0.00");
+                    }
+                    String mandateCode = (String) ht.get("50000845");
+                    String drawerCode = (String) ht.get("50000250");
+                    log.debug("instPayAmnt ::" + instPayAmnt);
+                    if (instPayAmnt.compareTo(BigDecimal.ZERO) <= 0)
+                    {
+                        udTCValidationData.setExistential(true);
+                        udTCValidationData.addErrorMessage("TX0209");
+                        return udTCValidationData;
+                    }
+                    int hins = 0;
+                    BigDecimal hamt = new BigDecimal(0);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    pstmt = objConn.prepareStatement("select total_instruments,total_amnt from deposit_header_txn "
+                                    + "where batch_nmbr like ? and deposit_nmbr like ?");
+                    pstmt.setString(1, batchNmbr);
+                    pstmt.setString(2, depno);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        hins = rs.getInt(1);
+                        hamt = new BigDecimal(rs.getString(2) != null ? rs.getString(2) : "0.00");
+                    }
+                    log.debug("Header Instrument : " + hins);
+                    log.debug("Header Amount : " + hamt);
+                    int dins = 0;
+                    BigDecimal damt = new BigDecimal(0);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    pstmt = objConn.prepareStatement(
+                                    "select count(*),sum(instrument_amnt) from deposit_detail_txn where deposit_nmbr like ?");
+                    pstmt.setString(1, depno);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        dins = rs.getInt(1);
+                        damt = new BigDecimal(rs.getString(2) != null ? rs.getString(2) : "0.00");
+                    }
+                    log.debug("Detail Instrument : " + dins);
+                    log.debug("Detail Amount : " + damt);
+                    log.debug("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+                    log.debug("Balance Instrument : " + (hins - dins));
+                    String roundStr = String.format("%.2f", new Object[] { hamt.subtract(damt) });
+                    log.debug("Balance Amount : " + roundStr);
+                    log.debug("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+                    BigDecimal currentDamt = new BigDecimal(0);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    pstmt = objConn.prepareStatement("select instrument_amnt from deposit_detail_txn where deposit_nmbr like ? "
+                                    + "and internal_transaction_nmbr like ?");
+                    pstmt.setString(1, depno);
+                    pstmt.setString(2, (String) ht.get("10000601"));
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        currentDamt = rs.getBigDecimal(1);
+                        if (currentDamt == null)
+                        {
+                            currentDamt = new BigDecimal(0);
+                        }
+                    }
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    log.debug("Old Detail Amount : " + currentDamt);
+                    udTCValidationData.addAttribute("ErrorCode", "");
+                    if (currentDamt.compareTo(BigDecimal.ZERO) != 0)
+                    {
+                        String currentDamtStr = currentDamt.toString();
+                        roundStr = String.format("%.2f", (hamt.subtract(((damt.subtract(currentDamt)).add(instPayAmnt)))));
+                        log.debug("Bal Amount count > 0::" + roundStr);
+                        int remainInst = (hins - dins);
+                        if (remainInst == 0 && new BigDecimal(roundStr).compareTo(BigDecimal.ZERO) > 0)
+                        {
+                            udTCValidationData.setExistential(true);
+                            udTCValidationData.addAttribute("10000606", currentDamtStr);
+                            udTCValidationData.addErrorMessage("TX0294");
+                            return udTCValidationData;
+                        }
+                        if (remainInst > 0 && (new BigDecimal(roundStr)).compareTo(BigDecimal.ZERO) == 0)
+                        {
+                            udTCValidationData.setExistential(true);
+                            udTCValidationData.addErrorMessage("TX0294");
+                            return udTCValidationData;
+                        }
+                        if (remainInst == 0 && !((new BigDecimal(roundStr)).compareTo(BigDecimal.ZERO) == 0))
+                        {
+                            udTCValidationData.setExistential(true);
+                            udTCValidationData.addAttribute("10000606", currentDamtStr);
+                            udTCValidationData.addErrorMessage("TX0294");
+                            return udTCValidationData;
+                        }
+                        if (new BigDecimal(roundStr).compareTo(BigDecimal.ZERO) < 0)
+                        {
+                            udTCValidationData.setExistential(false);
+                            udTCValidationData.addAttribute("10000606", currentDamtStr);
+                            udTCValidationData.addErrorMessage("TX0210");
+                            return udTCValidationData;
+                        }
+                    }
+                    else
+                    {
+                        roundStr = String.format("%.2f", new Object[] { hamt.subtract(damt.add(instPayAmnt)) });
+                        log.debug("Bal Amount count = 0::" + roundStr);
+                        int remainInst = (hins - dins - 1);
+                        if (remainInst == 0 && new BigDecimal(roundStr).compareTo(BigDecimal.ZERO) == 1)
+                        {
+                            udTCValidationData.setExistential(false);
+                            udTCValidationData.addAttribute("10000606", "");
+                            udTCValidationData.addErrorMessage("TX0214");
+                            return udTCValidationData;
+                        }
+                        if (remainInst > 0 && new BigDecimal(roundStr).compareTo(new BigDecimal("0.00")) == 0)
+                        {
+                            udTCValidationData.setExistential(false);
+                            udTCValidationData.addAttribute("10000606", "");
+                            udTCValidationData.addErrorMessage("TX0214");
+                            return udTCValidationData;
+                        }
+                        if (remainInst == 0 && !(new BigDecimal(roundStr).compareTo(new BigDecimal("0.00")) == 0))
+                        {
+                            udTCValidationData.setExistential(false);
+                            udTCValidationData.addAttribute("10000606", "");
+                            udTCValidationData.addErrorMessage("TX0214");
+                            return udTCValidationData;
+                        }
+                        if (new BigDecimal(roundStr).compareTo(BigDecimal.ZERO) < 0)
+                        {
+                            udTCValidationData.setExistential(false);
+                            udTCValidationData.addAttribute("10000606", "");
+                            udTCValidationData.addErrorMessage("TX0210");
+                            return udTCValidationData;
+                        }
+                    }
+                    strSql = "select txn_limits_level_flag, per_txn_min_amnt, per_txn_max_amnt "
+                            + "from client_product_mst where client_code = ? and product_code  = ? ";
+		            try
+		            {
+		                pstmt = objConn.prepareStatement(strSql);
+		                pstmt.setString(1, clientCode);
+		                pstmt.setString(2, productCode);
+		                rs = pstmt.executeQuery();
+		                if (rs.next())
+		                {
+		                    String txnLimit = rs.getString(1);
+		                    if (txnLimit.equalsIgnoreCase("I"))
+		                    {
+		                        BigDecimal perTxnMinAmt = rs.getBigDecimal(2);
+		                        BigDecimal perTxnMaxAmt = rs.getBigDecimal(3);
+		                        if (instPayAmnt.compareTo(perTxnMinAmt) < 0)
+		                        {
+		                            log.error("Error ::Amount field is not proper");
+		                            udTCValidationData.addErrorMessage("TX0248");
+		                            //return udTCValidationData;
+		                        }
+		                        if (instPayAmnt.compareTo(perTxnMaxAmt) > 0)
+		                        {
+		                            log.error("Error ::Amount field is not proper");
+		                            udTCValidationData.addErrorMessage("TX0249");
+		                            return udTCValidationData;
+		                        }
+		                    }
+		                }
+		            }
+		            finally
+		            {
+		                com.cashtech.centaur.utils.Utilities.doClose(rs);
+		                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+		            }
+                    String clearingLocCode = (String) ht.get("50000127");
+                    if (!(clearingLocCode == null || clearingLocCode.equals("")))
+                    {
+                        pstmt = objConn.prepareStatement("select get_hv_req_flag(?,?) from dual");
+                        pstmt.setString(1, productCode);
+                        pstmt.setString(2, clearingLocCode);
+                        rs = pstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            hvFlag = (rs.getString(1)).trim();
+                        }
+                        else
+                        {
+                            udTCValidationData.addErrorMessage("TX0259");
+                            return udTCValidationData;
+                        }
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                        if (hvFlag.equalsIgnoreCase("Y"))
+                        {
+                            strSql = "SELECT hv_cutoff_amount FROM clearing_location_mst WHERE clearing_loc_code =? "
+                                            + "AND valid_flag='Y' AND checker_action = 'A'";
+                            pstmt = objConn.prepareStatement(strSql);
+                            pstmt.setString(1, clearingLocCode);
+                            rs = pstmt.executeQuery();
+                            if (rs.next())
+                            {
+                                BigDecimal hvCutoffAmt = rs.getBigDecimal(1);
+                                if (hvCutoffAmt == null)
+                                {
+                                    hvCutoffAmt = new BigDecimal("0.00");
+                                }
+                                if (instPayAmnt.compareTo(hvCutoffAmt) >= 0)
+                                {
+                                    hvFlag = "Y";
+                                }
+                                else
+                                {
+                                    hvFlag = "N";
+                                }
+                            }
+                            else
+                            {
+                                udTCValidationData.addErrorMessage("G00051");
+                                return udTCValidationData;
+                            }
+                        }
+                        else
+                        {
+                            hvFlag = "N";
+                        }
+                    }
+                    if (hvFlag == null)
+                    {
+                        hvFlag = "N";
+                    }
+                    if (hvFlag != null && hvFlag.equals("N"))
+                    {
+                        if (clearingLocCode == null || clearingLocCode.equals(""))
+                        {
+                            // udTCValidationData.addAttribute("10000736","X");
+                        }
+                    }
+                    else
+                    {
+                        String routingCd = (String) ht.get("50000794");
+                        if (routingCd.equals("000000000"))
+                        {
+                            // udTCValidationData.addAttribute("10000736","N");
+                        }
+                        else
+                        {
+                            ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "10000606", "A");
+                            ht.put("50000794", routingCd);
+                            outPut = pg.execute(ht, 2);
+                            retVal = outPut.get("1001").toString().trim();
+                            errMsg = outPut.get("1002").toString().trim();
+                            if (!retVal.equals(""))
+                            {
+                                procName = (String) ht.get("procName");
+                                log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                                udTCValidationData.addErrorMessage(retVal);
+                                return udTCValidationData;
+                            }
+                            String highValBranch = outPut.get("1006").toString().trim();
+                            BigDecimal hvCutoffAmt = (BigDecimal) outPut.get("1008");
+                            if (hvCutoffAmt == null)
+                            {
+                                hvCutoffAmt = new BigDecimal("0.00");
+                            }
+                            BigDecimal instAmt = (BigDecimal) ht.get("10000606");
+                            if (instAmt == null)
+                            {
+                                instAmt = new BigDecimal("0.00");
+                            }
+                            int comp = instAmt.compareTo(hvCutoffAmt);
+                        }
+                    }
+                    udTCValidationData.addAttribute("10000736", hvFlag);
+                    log.debug(" @@@@@@End::Validation for Instrument Amount@@@@@@");
+                    log.debug(" End::Validation for Instrument Amount");
+                }
+                catch (NumberFormatException e)
+                {
+                    log.error("XXXX99@NumberFormatException occured | during Validation of instrument amount in   "
+                                    + Utilities.getStackTrace(e));
+                    txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+                    throw txnStatus;
+                }
+                catch (SQLException e)
+                {
+                    log.error("XXXX99@SQLException occured | during Validation of instrument amount in   "
+                                    + Utilities.getStackTrace(e));
+                    txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+                    throw txnStatus;
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("10000545"))
+            {
+                log.debug("Inside Validation of FX Rate having attribute id : 10000545");
+                String colValue = (String) ht.get(strAttribute);
+                if (colValue == null || colValue.equals("") || colValue.trim().equals(""))
+                {
+                    retVal = "TX0292";
+                    udTCValidationData.addErrorMessage(retVal);
+                    udTCValidationData.addAttribute("10000545", "");
+                    return udTCValidationData;
+                }
+                log.debug("$$$$$$$$$$$$$$$$$$$$End FX Rate Validation$$$$$$$$$$$$$$$$$$$$$$$");
+            }
+            else if ("10000611".equalsIgnoreCase(strAttribute))
+            {
+                handleRejectReasons(objConn, ht, udTCValidationData,false);
+                return udTCValidationData;
+            }
+            else if (strAttribute.equalsIgnoreCase("50000127"))
+            {
+                log.debug("Inside Validation of Clearing Location Code having attribute id : 50000127");
+                String colValue = (String) ht.get(strAttribute);
+                udTCValidationData.addAttribute("10002487", "");
+                udTCValidationData.addAttribute("50000244", "");
+                udTCValidationData.addAttribute("drawee_bank_description", "");
+                udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                udTCValidationData.addAttribute("50000246", "");
+                udTCValidationData.addAttribute("drawee_branch_description", "");
+                udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                if (colValue == null || colValue.equals(""))
+                {
+                    retVal = "TX0218";
+                    udTCValidationData.addErrorMessage(retVal);
+                    udTCValidationData.addAttribute("50000127", "");
+                    return udTCValidationData;
+                }
+                ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000127", "A");
+                log.debug("calling dep_chk_clearing_location proc--client_code" + clientCode + "productCode--" + productCode);
+                ht.put("10000504", clientCode);
+                ht.put("10000501", productCode);
+                ht.put("50000127", colValue);
+                ht.put("50000805", SessionContextContainer.getSessionContext().get("SELLERCODE"));
+                log.debug("clientCode is ::" + clientCode);
+                log.debug("productCode is ::" + productCode);
+                log.debug("colValue is ::" + colValue);
+                outPut = pg.execute(ht, 1);
+                retVal = outPut.get("1001").toString().trim();
+                if (!retVal.equals(""))
+                {
+                    log.debug("Inside if n retval is::" + retVal);
+                    procName = (String) ht.get("procName");
+                    log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                    udTCValidationData.addErrorMessage(retVal);
+                    udTCValidationData.addAttribute("loc_description", "");
+                    udTCValidationData.addAttribute("50000127", "");
+                    if (!retVal.equals("PDV401"))
+                    {
+                        udTCValidationData.addAttributeToDisable("loc_description");
+                        return udTCValidationData;
+                    }
+                }
+                udTCValidationData.addAttribute("50000127", colValue);
+                udTCValidationData.addAttribute("loc_description", outPut.get("1004").toString().trim());
+                udTCValidationData.addAttributeToDisable("loc_description");
+                udTCValidationData.addAttribute("50000537", outPut.get("1003").toString().trim());
+                pstmt = objConn.prepareStatement("select get_hv_req_flag(?,?) from dual");
+                pstmt.setString(1, productCode);
+                pstmt.setString(2, colValue);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    hvFlag = (rs.getString(1)).trim();
+                    log.debug("After Execution of a function ::hvFlag " + hvFlag);
+                    log.debug("hvFlag :::::::" + hvFlag);
+                }
+                else
+                {
+                    udTCValidationData.addErrorMessage("TX0259");
+                    udTCValidationData.addAttribute("loc_description", "");
+                    udTCValidationData.addAttributeToDisable("loc_description");
+                    udTCValidationData.addAttribute("50000127", "");
+                    return udTCValidationData;
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                if (hvFlag.equalsIgnoreCase("Y"))
+                {
+                    BigDecimal instPayAmnt = new BigDecimal((String) ht.get("10000606"));
+                    log.debug("instPayAmnt id ------->" + instPayAmnt);
+                    try
+                    {
+                        strSql = "SELECT hv_cutoff_amount FROM clearing_location_mst WHERE clearing_loc_code =?"
+                                        + " AND valid_flag='Y' AND checker_action = 'A'";
+                        pstmt = objConn.prepareStatement(strSql);
+                        pstmt.setString(1, colValue);
+                        rs = pstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            BigDecimal hvCutoffAmt = rs.getBigDecimal(1);
+                            if (hvCutoffAmt == null)
+                            {
+                                hvCutoffAmt = new BigDecimal("0.00");
+                            }
+                            if (instPayAmnt.compareTo(hvCutoffAmt) >= 0)
+                                hvFlag = "Y";
+                            else
+                                hvFlag = "N";
+                        }
+                        else
+                        {
+                            log.debug("Inside else");
+                            udTCValidationData.addErrorMessage("G00051");
+                            return udTCValidationData;
+                        }
+                    }
+                    catch (SQLException e)
+                    {
+                        log.error(Utilities.getStackTrace(e));
+                        udTCValidationData.setExistential(false);
+                        udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                    }
+                    catch (Exception e1)
+                    {
+                        log.error(Utilities.getStackTrace(e1));
+                        udTCValidationData.setExistential(false);
+                        udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    }
+                }
+                else
+                {
+                    hvFlag = "N";
+                }
+                String bankBranchFlag = TCICache.getFromCache("BK_BR_FLAG").toString();
+                String draweeBankCode = "";
+                String draweeBranchCode = "";
+                if (bankBranchFlag.equals("B"))
+                {
+                    draweeBankCode = (String) ht.get("50000244");
+                }
+                else if (bankBranchFlag.equals("R"))
+                {
+                    draweeBranchCode = (String) ht.get("50000246");
+                }
+                log.debug("$$$$$$$$$$$$$$$$$$$$End Clearing Location Code Validation$$$$$$$$$$$$$$$$$$$$$$$");
+            }
+            else if (strAttribute.equalsIgnoreCase("70000127"))
+            {
+                log.debug("Inside Validation of Clearing Location Code having attribute id : 50000127");
+                String colValue = (String) ht.get(strAttribute);
+                String mandateCode = (String) ht.get("50000845");
+                String drawerCode = (String) ht.get("50000250");
+                if (colValue == null || colValue.equals(""))
+                {
+                    retVal = "TX0218";
+                    udTCValidationData.addErrorMessage(retVal);
+                    udTCValidationData.addAttribute("50000127", "");
+                    return udTCValidationData;
+                }
+                ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000127", "A");
+                log.debug("calling dep_chk_clearing_location proc--client_code" + clientCode + "productCode--" + productCode);
+                ht.put("10000504", clientCode);
+                ht.put("10000501", productCode);
+                ht.put("50000127", colValue);
+                log.debug("clientCode is ::" + clientCode);
+                log.debug("productCode is ::" + productCode);
+                log.debug("colValue is ::" + colValue);
+                outPut = pg.execute(ht, 1);
+                retVal = outPut.get("1001").toString().trim();
+                if (!retVal.equals(""))
+                {
+                    if (retVal.equals("PDV401"))
+                    {
+                        retVal = "";
+                    }
+                    else
+                    {
+                        log.debug("Inside if n retval is::" + retVal);
+                        procName = (String) ht.get("procName");
+                        log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                        udTCValidationData.addErrorMessage(retVal);
+                        udTCValidationData.addAttribute("loc_description", "");
+                        udTCValidationData.addAttribute("50000127", "");
+                        if (!retVal.equals("PDV401"))
+                        {
+                            udTCValidationData.addAttributeToDisable("loc_description");
+                            return udTCValidationData;
+                        }
+                    }
+                }
+                udTCValidationData.addAttribute("50000127", colValue);
+                udTCValidationData.addAttribute("loc_description", outPut.get("1004").toString().trim());
+                udTCValidationData.addAttributeToDisable("loc_description");
+                udTCValidationData.addAttribute("50000537", outPut.get("1003").toString().trim());
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                pstmt = objConn.prepareStatement("select get_hv_req_flag(?,?) from dual");
+                pstmt.setString(1, productCode);
+                pstmt.setString(2, colValue);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    hvFlag = (rs.getString(1)).trim();
+                    log.debug("After Execution of a function ::hvFlag " + hvFlag);
+                    log.debug("hvFlag :::::::" + hvFlag);
+                }
+                else
+                {
+                    udTCValidationData.addErrorMessage("TX0259");
+                    udTCValidationData.addAttribute("loc_description", "");
+                    udTCValidationData.addAttributeToDisable("loc_description");
+                    udTCValidationData.addAttribute("50000127", "");
+                    return udTCValidationData;
+                }
+                if (hvFlag.equalsIgnoreCase("Y"))
+                {
+                    BigDecimal instPayAmnt = new BigDecimal((String) ht.get("10000606"));
+                    log.debug("instPayAmnt id ------->" + instPayAmnt);
+                    try
+                    {
+                        strSql = "SELECT hv_cutoff_amount FROM clearing_location_mst WHERE clearing_loc_code =?"
+                                        + " AND valid_flag='Y' AND checker_action = 'A'";
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                        pstmt = objConn.prepareStatement(strSql);
+                        pstmt.setString(1, colValue);
+                        rs = pstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            BigDecimal hvCutoffAmt = rs.getBigDecimal(1);
+                            if (hvCutoffAmt == null)
+                            {
+                                hvCutoffAmt = new BigDecimal("0.00");
+                            }
+                            if (instPayAmnt.compareTo(hvCutoffAmt) >= 0)
+                                hvFlag = "Y";
+                            else
+                                hvFlag = "N";
+                        }
+                        else
+                        {
+                            log.debug("Inside else");
+                            udTCValidationData.addErrorMessage("G00051");
+                            return udTCValidationData;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        log.error(Utilities.getStackTrace(e));
+                        udTCValidationData.setExistential(false);
+                        udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    }
+                }
+                else
+                {
+                    hvFlag = "N";
+                }
+                String statusFlag = (String) ht.get("10000503");
+                if (statusFlag.equals("A") || hvFlag.equals("N"))
+                {
+                }
+                String bankBranchFlag = TCICache.getFromCache("BK_BR_FLAG").toString();
+                String draweeBankCode = "";
+                String draweeBranchCode = "";
+                if (bankBranchFlag.equals("B"))
+                {
+                    draweeBankCode = (String) ht.get("50000244");
+                }
+                else if (bankBranchFlag.equals("R"))
+                {
+                    draweeBranchCode = (String) ht.get("50000246");
+                }
+                log.debug("$$$$$$$$$$$$$$$$$$$$End Clearing Location Code Validation$$$$$$$$$$$$$$$$$$$$$$$");
+            }
+            else if (strAttribute.equalsIgnoreCase("50000794"))
+            {
+                log.error("Start validating Routing Code 50000794");
+                log.debug("Inside Validation of Routing CD having attribute id : 50000794");
+                String colValue = (String) ht.get(strAttribute);
+                int colvalLength = colValue.trim().length();
+                if (colValue == null || (colValue.equals("")))
+                {
+                    udTCValidationData.addAttributeToEnable("50000794");
+                    udTCValidationData.addAttribute("50000794", "000000000");
+                    udTCValidationData.addAttributeToDisable("50000794");
+                    return udTCValidationData;
+                }
+                if (colvalLength < 9)
+                {
+                    log.debug("Inside colvallength" + colvalLength);
+                    log.error("Error ::Length is less than required length::");
+                    udTCValidationData.addErrorMessage("TX0278");
+                    udTCValidationData.addAttributeToEnable("50000794");
+                    udTCValidationData.addAttribute("50000794", "000000000");
+                    udTCValidationData.addAttributeToDisable("50000794");
+                    colValue = "000000000";
+                }
+                if (colValue.equals("000000000"))
+                {
+                    // udTCValidationData.addAttribute("10000736","N");
+                }
+                else
+                {
+                    log.error("Inside else ::");
+                    ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000794", "A");
+                    log.debug("calling procedure ");
+                    ht.put("50000794", colValue);
+                    outPut = pg.execute(ht, 1);
+                    retVal = outPut.get("1001").toString().trim();
+                    errMsg = outPut.get("1002").toString().trim();
+                    log.debug("retVal : " + retVal);
+                    log.debug("errMsg : " + errMsg);
+                    log.debug("retVal : " + retVal + "  errMsg ::: " + errMsg);
+                    if (!retVal.equals(""))
+                    {
+                        procName = (String) ht.get("procName");
+                        log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                        udTCValidationData.addAttributeToEnable("50000794");
+                        udTCValidationData.addAttribute("50000794", "000000000");
+                        udTCValidationData.addAttributeToDisable("50000794");
+                        colValue = "000000000";
+                    }
+                    log.info("retVal" + retVal);
+                    String draweeBranch = outPut.get("1004").toString().trim();
+                    log.info("draweeBranch" + draweeBranch);
+                    String draweeBank = outPut.get("1005").toString().trim();
+                    log.info("draweeBank" + draweeBank);
+                    String highValBranch = outPut.get("1006").toString().trim();
+                    log.info("highValBranch" + highValBranch);
+                    String clearLocCode = outPut.get("1007").toString().trim();
+                    log.info("clearLocCode" + clearLocCode);
+                    BigDecimal hvCutoffAmt = (BigDecimal) outPut.get("1008");
+                    log.info("hvCutoffAmt " + hvCutoffAmt);
+                    BigDecimal instAmt = (BigDecimal) ht.get("10000606");
+                    log.debug("retVal" + retVal);
+                    log.debug("draweeBranch" + draweeBranch);
+                    log.debug("draweeBank" + draweeBank);
+                    log.debug("highValBranch" + highValBranch);
+                    log.debug("clearLocCode" + clearLocCode);
+                    log.debug("hvCutoffAmt " + hvCutoffAmt);
+                    String enteredLoc = (String) ht.get("50000127");
+                    if (!colValue.equals("000000000"))
+                    {
+                        if (!enteredLoc.equalsIgnoreCase(clearLocCode))
+                        {
+                            log.debug("Enter value val is not equal to procval " + clearLocCode);
+                            log.error("Error while comparing fetched clearing loc with entered loc::");
+                            udTCValidationData.addErrorMessage("TX0258");
+                            return udTCValidationData;
+                        }
+                    }
+                    udTCValidationData.addAttribute("50000244", draweeBank);
+                    udTCValidationData.addAttribute("50000246", draweeBranch);
+                    int comp = instAmt.compareTo(hvCutoffAmt);
+                }
+                String mandateCode = (String) ht.get("50000845");
+                String drawerCode = (String) ht.get("50000250");
+                if (sysDirectdbt.equalsIgnoreCase("Y"))
+                {
+                    int asCount = 1;
+                    String lsFlag = null;
+                    if (asCount == -1)
+                    {
+                        lsFlag = "I";
+                    }
+                    if (asCount == 1)
+                    {
+                        lsFlag = "D";
+                    }
+                    java.util.Date appldt = DateUtils.str2UtilDate(TCICache.getFromCache("APPLDATE").toString(),
+                                    "dd/MM/yyyy hh:mm:ss");
+                    if (mandateCode != null && !"".equalsIgnoreCase(mandateCode.trim()) && drawerCode != null
+                                    && !"".equalsIgnoreCase(drawerCode.trim()))
+                    {
+                        ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000794", "A");
+                        ht.put("10000504", clientCode);
+                        ht.put("50000250", drawerCode);
+                        ht.put("50000845", mandateCode);
+                        ht.put("1151", appldt);
+                        ht.put("1152", lsFlag);
+                        outPut = pg.execute(ht, 2);
+                        retVal = (outPut.get("1001") == null) ? "" : outPut.get("1001").toString().trim();
+                        errMsg = (outPut.get("1002") == null) ? "" : outPut.get("1002").toString().trim();
+                        log.info("retVal : " + retVal);
+                        log.info("errMsg : " + errMsg);
+                        log.info("retVal : " + retVal + "  errMsg ::: " + errMsg);
+                        if (!retVal.equals(""))
+                        {
+                            procName = (String) ht.get("procName");
+                            log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                            udTCValidationData.addErrorMessage(retVal);
+                            return udTCValidationData;
+                        }
+                    }
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("50000085"))
+            {
+                cstmt = null;
+                try
+                {
+                    log.debug("Validation for 50000085 Currency Code ........" + ht.get("50000085").toString());
+                    String strKey = null;
+                    cstmt = objConn.prepareStatement("select ccy_code  from currency_mst where ccy_code=? and valid_flag='Y'");
+                    strKey = (String) ht.get("50000085");
+                    cstmt.setString(1, strKey);
+                    rs = cstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                        udTCValidationData.setExistential(true);
+                    }
+                    else
+                    {
+                        String strErrorCode = "TXB122";
+                        udTCValidationData.addErrorMessage(strErrorCode);
+                        udTCValidationData.addAttribute("50000085", "");
+                        udTCValidationData.addAttribute("ccy_description", "");
+                        udTCValidationData.addAttributeToDisable("ccy_description");
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error(Utilities.getStackTrace(e));
+                    udTCValidationData.setExistential(false);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                }
+                catch (Exception e1)
+                {
+                    log.error(Utilities.getStackTrace(e1));
+                    udTCValidationData.setExistential(false);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("50000250"))
+            {
+                String colValue = ((String) ht.get(strAttribute)).toUpperCase();
+                String payerAnalysisFlag = payerAnalysisFlag = (String) ht.get("55540045");
+                log.error("Drawer Code :: " + colValue + " payerAnalysisFlag::" + payerAnalysisFlag);
+                if (colValue == null || colValue.equals(""))
+                {
+                    retVal = "TX0219";
+                    udTCValidationData.addErrorMessage(retVal);
+                    udTCValidationData.addAttribute("50000250", "");
+                    udTCValidationData.addAttribute("50000251", "");
+                    udTCValidationData.addAttribute("50000252", "");
+                    if (payerAnalysisFlag != null && payerAnalysisFlag.equalsIgnoreCase("Y"))
+                        udTCValidationData.addAttributeToDisable("50000251");
+                    else
+                        udTCValidationData.addAttributeToEnable("50000251");
+                    return udTCValidationData;
+                }
+                ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000250", "A");
+                ht.put("10000504", clientCode);
+                ht.put("50000250", colValue);
+                outPut = pg.execute(ht, 1);
+                log.debug("After execution of DEP_CHK_DRAWER proc and out put is::" + outPut.get("1001").toString().trim());
+                retVal = outPut.get("1001").toString().trim();
+                String drawerdesc = outPut.get("1003").toString().trim();
+                log.error("After execution of DEP_CHK_DRAWER proc,Client Code ::" + clientCode + " Product Code ::" + productCode
+                                + "  Drawer Code ::" + colValue + " Drawer Description ::" + drawerdesc);
+                if (!retVal.equals(""))
+                {
+                    log.debug("Inside if  having retval :" + retVal);
+                    procName = (String) ht.get("procName");
+                    log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                    udTCValidationData.addErrorMessage(retVal);
+                    udTCValidationData.addAttribute("50000250", "");
+                    udTCValidationData.addAttribute("50000251", "");
+                    udTCValidationData.addAttribute("50000252", "");
+                    if (payerAnalysisFlag != null && payerAnalysisFlag.equalsIgnoreCase("Y"))
+                        udTCValidationData.addAttributeToDisable("50000251");
+                    else
+                        udTCValidationData.addAttributeToEnable("50000251");
+                    return udTCValidationData;
+                }
+                else
+                {
+                    log.debug("Inside else  having retval :" + retVal);
+                    udTCValidationData.addAttribute("50000250", colValue);
+                    udTCValidationData.addAttribute("50000251", drawerdesc);
+                    String drawerAccNmbr = CommonUtils.getPayerAccountNmbr(objConn, clientCode, colValue);
+                    if(StringUtils.hasLength(drawerAccNmbr))
+                    {
+                        udTCValidationData.addAttribute("50000252", drawerAccNmbr);
+                    }
+                    if (payerAnalysisFlag != null && payerAnalysisFlag.equalsIgnoreCase("Y"))
+                        udTCValidationData.addAttributeToDisable("50000251");
+                    else
+                        udTCValidationData.addAttributeToEnable("50000251");
+                }
+                log.debug("End::drawer code Validation");
+            }
+            else if (strAttribute.equalsIgnoreCase("50000244"))
+            {
+                String colValue = (String) ht.get(strAttribute);
+                String mandateCode = (String) ht.get("50000845");
+                String drawerCode = (String) ht.get("50000250");
+                String str127 = (String) ht.get("50000127");
+                String str531 = (String) ht.get("10000531");
+                String strDraweeBankCode = (String) ht.get("50000244");
+                String validflag = (String) ht.get("validflag");
+                log.debug("Inside Valid Flag : " + validflag);
+                cStmt = null;
+                cstmt = null;
+                String dispBankCode = null;
+                String errorMsg = null;
+                if (colValue == null || colValue.equals(""))
+                {
+                    udTCValidationData.addAttribute("50000244", "");
+                    udTCValidationData.addAttribute("drawee_bank_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    return udTCValidationData;
+                }
+                if (validflag.equals("Y"))
+                {
+                    log.debug("Inside Valid Flag Y");
+                    String suspendedFlag = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement("select suspended_flag from drawee_bank_mst where drawee_bank_code = ?");
+                        cstmt.setString(1, strDraweeBankCode);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            suspendedFlag = rs.getString(1);
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    String bankdesc = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement(
+                                        "select drawee_bank_description from drawee_bank_mst where drawee_bank_code = ?");
+                        cstmt.setString(1, strDraweeBankCode);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            bankdesc = rs.getString(1);
+                        }
+                        else
+                        {
+                            bankdesc = strDraweeBankCode;
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    log.info("Calling Proc");
+                    Connection objConns = null;
+                    objConns = (Connection) ht.get("connection");
+                    Timestamp tsMakerDt = Utilities.getApplTimeStamp(objConn);
+                    String strtsMakerDt = DateUtils.sqlTimeStamp2Str(tsMakerDt, "dd/MM/yyyy HH:mm:ss");
+                    try
+                    {
+                        cStmt = objConns.prepareCall("{call DRAWEE_BANK_BRANCH_CREATE(?,?, ?, ?, ?, ?, ?, ?,?, ?, ?)}");
+                        log.debug("strDraweeBankCode" + strDraweeBankCode);
+                        log.debug("bankdesc" + bankdesc);
+                        log.debug("suspended_flag" + suspendedFlag);
+                        log.debug("existFlag:R");
+                        log.debug("CLEARINGLOCCODE" + str127);
+                        log.debug("MAKERCODE" + str531);
+                        log.debug("MAKERDATETIME" + strtsMakerDt);
+                        cStmt.setString(1, strDraweeBankCode);
+                        cStmt.setString(2, bankdesc);
+                        cStmt.setString(3, "N");
+                        cStmt.setString(4, "B");
+                        cStmt.setString(5, null);
+                        cStmt.setString(6, null);
+                        cStmt.setString(7, str127);
+                        cStmt.setString(8, str531);
+                        cStmt.setString(9, strtsMakerDt);
+                        cStmt.registerOutParameter(10, Types.VARCHAR);
+                        cStmt.registerOutParameter(11, Types.VARCHAR);
+                        cStmt.execute();
+                        log.debug("check2");
+                        retVal = cStmt.getString(10);
+                        if (cStmt.getString(11) != null)
+                        {
+                            errorMsg = cStmt.getString(11).trim();
+                        }
+                        log.debug("retVal" + retVal);
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(cStmt);
+                    }
+                    if (retVal != null)
+                    {
+                        log.info("Error in Proc");
+                        log.error("Error while Executing Procedure " + procName + "ErrorCode = " + retVal + " :error msg:: "
+                                        + errorMsg);
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        log.debug("Proc Executed Success");
+                        log.error("Procedure executed successfully  " + procName + "ErrorCode = " + retVal);
+                        log.debug("check3");
+                    }
+                    return udTCValidationData;
+                }
+                ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000244", "A");
+                log.debug("Calling Procedure ::fk_draweebank");
+                ht.put("50000244", colValue);
+                outPut = pg.execute(ht, 1);
+                retVal = outPut.get("1001").toString().trim();
+                log.debug("after execution  " + retVal + "and output is::" + (String) outPut.get("1003"));
+                if (!retVal.equals(""))
+                {
+                    if (retVal.equals("D"))
+                    {
+                        udTCValidationData.addErrorMessage("TX0240");
+                        return udTCValidationData;
+                    }
+                    String strAhdrbkdrbr = TCICache.getFromCache("AHDRBKDRBR").toString();
+                    if (strAhdrbkdrbr.equalsIgnoreCase("Y"))
+                    {
+                        udTCValidationData.addErrorMessage("TX0242");
+                        txnStatus.addErrMessage("TX0242");
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("TX0257");
+                        txnStatus.addErrMessage("TX0257");
+                        udTCValidationData.addAttribute("50000244", "");
+                        udTCValidationData.addAttribute("drawee_bank_description", "");
+                        udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                        udTCValidationData.setExistential(false);
+                    }
+                }
+                else
+                {
+                    udTCValidationData.addAttribute("drawee_bank_description", (String) outPut.get("1003"));
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    log.debug("drawee_bank_description-----> " + (String) outPut.get("1003"));
+                }
+                String primaryLocation = (ht.get("50000537").toString()).trim();
+
+                if ((productTypeCode.equals("B")) || (productTypeCode.equals("N")))
+                {
+                    udTCValidationData.addAttribute("50000537", primaryLocation);
+                }
+                else if ((!productTypeCode.equals("O")) && (!productTypeCode.equals("B")))
+                {
+                    udTCValidationData.addAttribute("50000127", primaryLocation);
+                    udTCValidationData.addAttribute("50000537", primaryLocation);
+                }
+                /*if (productTypeCode.equals("O"))
+                {
+                    udTCValidationData.addAttribute("50000127", "");
+                }*/
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                pstmt = objConn.prepareStatement("SELECT internal_funds_transfer_flag FROM product_mst WHERE product_code = ?");
+                pstmt.setString(1, productCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    intnalFndTnfr = rs.getString(1);
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                if (intnalFndTnfr.equals("Y"))
+                {
+                    try
+                    {
+                        pstmt = objConn.prepareStatement("SELECT disp_bank_code FROM dispatch_bank_mst WHERE bank_type_flag = 'S' "
+                                        + "AND valid_flag = 'Y' AND disp_bank_code = ?");
+                        pstmt.setString(1, colValue);
+                        rs = pstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            dispBankCode = rs.getString(1);
+                        }
+                        else
+                        {
+                            udTCValidationData.addErrorMessage("TX02C5");
+                            txnStatus.addErrMessage("TX02C5");
+                            udTCValidationData.addAttribute("50000244", "");
+                            udTCValidationData.addAttribute("drawee_bank_description", "");
+                            udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                            return udTCValidationData;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        log.debug("Exception " + ex);
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    }
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("10002487"))
+            {
+                String colValue = (String) ht.get(strAttribute);
+                String mandateCode = (String) ht.get("50000845");
+                String drawerCode = (String) ht.get("50000250");
+                String str127 = (String) ht.get("50000127");
+                String str531 = (String) ht.get("10000531");
+                String strDraweeBankCode = (String) ht.get("50000244");
+                String validflag = (String) ht.get("validflag");
+                Timestamp applDate = DateUtils.str2SqlTimeStamp(TCICache.getFromCache("APPLDATE").toString(), "dd/MM/yyyy");
+                log.debug("Inside Valid Flag : " + validflag);
+                cStmt = null;
+                String strKey = (String) ht.get("50000246");
+                String str532 = (String) ht.get("10000532");
+                String strClearingLocCode = null;
+                String dispBankCode = null;
+                String errorMsg = null;
+                String strInstId = DenominationEnrichmentUtils.getPayCollDetail(objConn, productCode);
+                Timestamp activationDate = getActivationDate(objConn, depno);
+                String instNumbr = (String) ht.get("10000732");
+                String depoNmbr = (String) ht.get("10000723");
+                if(instNumbr != null)
+                {
+                    instDuplicateCheck(udTCValidationData,objConn,depoNmbr,strDraweeBankCode,instNumbr,(String) ht.get("10000601"));
+                    String errorMesg = udTCValidationData.getStrErrorMessage();
+                    if(!errorMesg.equals(""))
+                    {
+                        return udTCValidationData;
+                    }
+                }
+                if (CommonUtils.isCashTxn(strPayCollDetail))
+                {
+                    udTCValidationData.addAttribute("d10000611", DateUtils.sqlTimeStamp2Str(activationDate, "dd/MM/yyyy"));
+                }
+                if (colValue == null || colValue.equals(""))
+                {
+                    udTCValidationData.addAttribute("10002487", "");
+                    udTCValidationData.addAttribute("50000244", "");
+                    udTCValidationData.addAttribute("drawee_bank_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    udTCValidationData.addAttribute("50000246", "");
+                    udTCValidationData.addAttribute("drawee_branch_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                    return udTCValidationData;
+                }
+                if (strKey == null || strKey.equals("") || strDraweeBankCode.equals("") || strDraweeBankCode == null
+                                || (!colValue.equals(strDraweeBankCode)))
+                {
+                    udTCValidationData.addAttribute("10002487", "");
+                    udTCValidationData.addAttribute("50000244", "");
+                    udTCValidationData.addAttribute("drawee_bank_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    udTCValidationData.addAttribute("50000246", "");
+                    udTCValidationData.addAttribute("drawee_branch_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                    udTCValidationData.addErrorMessage("TX02I01");
+                    return udTCValidationData;
+                }
+                if (validflag.equals("Y"))
+                {
+                    log.debug("Inside Valid Flag Y");
+                    String suspendedFlag = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement("select suspended_flag from drawee_bank_mst where drawee_bank_code = ?");
+                        cstmt.setString(1, strDraweeBankCode);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            suspendedFlag = rs.getString(1);
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    String bankdesc = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement(
+                                        "select drawee_bank_description from drawee_bank_mst where drawee_bank_code = ?");
+                        cstmt.setString(1, strDraweeBankCode);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            bankdesc = rs.getString(1);
+                        }
+                        else
+                        {
+                            bankdesc = strDraweeBankCode;
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    String branchdesc = null;
+                    try
+                    {
+                        cstmt = objConn.prepareStatement(
+                                        "select drawee_branch_description from drawee_bank_branch_mst where drawee_branch_code = ?");
+                        cstmt.setString(1, strKey);
+                        rs = cstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            branchdesc = rs.getString(1);
+                        }
+                        else
+                        {
+                            branchdesc = strKey;
+                        }
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+                    }
+                    log.info("Calling Proc");
+                    Connection objConns = null;
+                    objConns = (Connection) ht.get("connection");
+                    Timestamp tsMakerDt = Utilities.getApplTimeStamp(objConn);
+                    String strtsMakerDt = DateUtils.sqlTimeStamp2Str(tsMakerDt, "dd/MM/yyyy HH:mm:ss");
+                    try
+                    {
+                        cStmt = objConns.prepareCall("{call DRAWEE_BANK_BRANCH_CREATE(?,?, ?, ?, ?, ?, ?, ?,?, ?, ?)}");
+                        log.debug("strDraweeBankCode" + strDraweeBankCode);
+                        log.debug("bankdesc" + bankdesc);
+                        log.debug("suspended_flag" + suspendedFlag);
+                        log.debug("existFlag:R");
+                        log.debug("CLEARINGLOCCODE" + str127);
+                        log.debug("MAKERCODE" + str531);
+                        log.debug("MAKERDATETIME" + strtsMakerDt);
+                        cStmt.setString(1, strDraweeBankCode);
+                        cStmt.setString(2, bankdesc);
+                        cStmt.setString(3, "N");
+                        cStmt.setString(4, "B");
+                        cStmt.setString(5, null);
+                        cStmt.setString(6, null);
+                        cStmt.setString(7, str127);
+                        cStmt.setString(8, str531);
+                        cStmt.setString(9, strtsMakerDt);
+                        cStmt.registerOutParameter(10, Types.VARCHAR);
+                        cStmt.registerOutParameter(11, Types.VARCHAR);
+                        cStmt.execute();
+                        log.debug("check2");
+                        retVal = cStmt.getString(10);
+                        if (cStmt.getString(11) != null)
+                        {
+                            errorMsg = cStmt.getString(11).trim();
+                        }
+                        log.debug("retVal" + retVal);
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(cStmt);
+                    }
+                    if (retVal != null)
+                    {
+                        log.info("Error in Proc");
+                        log.error("Error while Executing Procedure " + procName + "ErrorCode = " + retVal + " :error msg:: "
+                                        + errorMsg);
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        log.debug("Proc Executed Success");
+                        log.error("Procedure executed successfully  " + procName + "ErrorCode = " + retVal);
+                        log.debug("check3");
+                    }
+                    log.debug("Calling Proc DRAWEE_BANK_BRANCH_CREATE");
+                    log.debug("strDraweeBankCode" + strDraweeBankCode);
+                    log.debug("bankdesc" + bankdesc);
+                    log.debug("suspended_flag" + suspendedFlag);
+                    log.debug("existFlag:R");
+                    log.debug("draweebranch" + strKey);
+                    log.debug("draweebranchdesc" + branchdesc);
+                    log.debug("CLEARINGLOCCODE" + str127);
+                    log.debug("MAKERCODE" + str531);
+                    log.debug("MAKERDATETIME" + strtsMakerDt);
+                    try
+                    {
+                        cStmt = objConns.prepareCall("{call DRAWEE_BANK_BRANCH_CREATE(?,?, ?, ?, ?, ?, ?, ?,?, ?, ?)}");
+                        cStmt.setString(1, strDraweeBankCode);
+                        cStmt.setString(2, bankdesc);
+                        cStmt.setString(3, suspendedFlag);
+                        cStmt.setString(4, "R");
+                        cStmt.setString(5, strKey);
+                        cStmt.setString(6, branchdesc);
+                        cStmt.setString(7, str127);
+                        cStmt.setString(8, str531);
+                        cStmt.setString(9, strtsMakerDt);
+                        cStmt.registerOutParameter(10, Types.VARCHAR);
+                        cStmt.registerOutParameter(11, Types.VARCHAR);
+                        cStmt.execute();
+                        log.debug("check2");
+                        retVal = cStmt.getString(10);
+                        if (cStmt.getString(11) != null)
+                        {
+                            errorMsg = cStmt.getString(11).trim();
+                        }
+                        log.info("retVal" + retVal);
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(cStmt);
+                    }
+                    if (retVal != null)
+                    {
+                        log.debug("Error in Proc");
+                        log.error("Error while Executing Procedure " + procName + "ErrorCode = " + retVal + " :error msg:: "
+                                        + errorMsg);
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        log.debug("Proc Executed Success");
+                        log.error("Procedure executed successfully  " + procName + "ErrorCode = " + retVal);
+
+                    }
+                    return udTCValidationData;
+                }
+                ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "50000244", "A");
+                log.debug("Calling Procedure ::fk_draweebank");
+                ht.put("50000244", strDraweeBankCode);
+                outPut = pg.execute(ht, 1);
+                retVal = outPut.get("1001").toString().trim();
+                log.debug("after execution  " + retVal + "and output is::" + (String) outPut.get("1003"));
+                if (!retVal.equals(""))
+                {
+                    if (retVal.equals("D"))
+                    {
+                        udTCValidationData.addErrorMessage("TX0240");
+                        return udTCValidationData;
+                    }
+                    String strAhdrbkdrbr = TCICache.getFromCache("AHDRBKDRBR").toString();
+                    if (strAhdrbkdrbr.equalsIgnoreCase("Y"))
+                    {
+                        udTCValidationData.addErrorMessage("TX0242");
+                        txnStatus.addErrMessage("TX0242");
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("TX0257");
+                        txnStatus.addErrMessage("TX0257");
+                        udTCValidationData.addAttribute("10002487", "");
+                        udTCValidationData.addAttribute("50000244", "");
+                        udTCValidationData.addAttribute("drawee_bank_description", "");
+                        udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                        udTCValidationData.addAttribute("50000246", "");
+                        udTCValidationData.addAttribute("drawee_branch_description", "");
+                        udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                        udTCValidationData.setExistential(false);
+                    }
+                }
+                else
+                {
+                    udTCValidationData.addAttribute("drawee_bank_description", (String) outPut.get("1003"));
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    log.debug("drawee_bank_description-----> " + (String) outPut.get("1003"));
+                }
+                String primaryLocation = (ht.get("50000537").toString()).trim();
+                handleRejectReasons(objConn, ht, udTCValidationData,false);
+                if ((productTypeCode.equals("B")) || (productTypeCode.equals("N")))
+                {
+                    udTCValidationData.addAttribute("50000537", primaryLocation);
+                }
+                else if ((!productTypeCode.equals("O")) && (!productTypeCode.equals("B")))
+                {
+                    udTCValidationData.addAttribute("50000127", primaryLocation);
+                    udTCValidationData.addAttribute("50000537", primaryLocation);
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                pstmt = objConn.prepareStatement("SELECT internal_funds_transfer_flag FROM product_mst WHERE product_code = ?");
+                pstmt.setString(1, productCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    intnalFndTnfr = rs.getString(1);
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                if (intnalFndTnfr.equals("Y"))
+                {
+                    try
+                    {
+                        pstmt = objConn.prepareStatement("SELECT disp_bank_code FROM dispatch_bank_mst WHERE bank_type_flag = 'S' "
+                                        + "AND valid_flag = 'Y' AND disp_bank_code = ?");
+                        pstmt.setString(1, strDraweeBankCode);
+                        rs = pstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            dispBankCode = rs.getString(1);
+                        }
+                        else
+                        {
+                            udTCValidationData.addErrorMessage("TX02C5");
+                            txnStatus.addErrMessage("TX02C5");
+                            udTCValidationData.addAttribute("10002487", "");
+                            udTCValidationData.addAttribute("50000244", "");
+                            udTCValidationData.addAttribute("drawee_bank_description", "");
+                            udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                            udTCValidationData.addAttribute("50000246", "");
+                            udTCValidationData.addAttribute("drawee_branch_description", "");
+                            udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                            return udTCValidationData;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        log.debug("Exception " + ex);
+                    }
+                    finally
+                    {
+                        com.cashtech.centaur.utils.Utilities.doClose(rs);
+                        com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    }
+                }
+                String payerAnalysisFlag = null;
+                String drawerDescMandatory = null;
+                String strCheck = "select payer_analysis_flag,DRAWER_DESC_MANDATORY from client_product_mst "
+                                + "where client_code = ? and product_code = ? ";
+                pstmt = objConn.prepareStatement(strCheck);
+                pstmt.setString(1, clientCode);
+                pstmt.setString(2, productCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    payerAnalysisFlag = rs.getString(1);
+                    drawerDescMandatory = rs.getString(2);
+                }
+                log.info("payer_analysis_flag ::::::" + payerAnalysisFlag);
+                log.info("drawer_desc_mandatory ::::::::" + drawerDescMandatory);
+                if (payerAnalysisFlag.equals("Y") || drawerDescMandatory.equalsIgnoreCase("Y"))
+                {
+                    udTCValidationData.addAttribute("MandFlag", "Y");
+                }
+                else
+                {
+                    udTCValidationData.addAttribute("MandFlag", "N");
+                }
+                String retailClient = null;
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                pstmt = objConn.prepareStatement("SELECT retail_client FROM client_mst WHERE client_code = ?");
+                pstmt.setString(1, clientCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    retailClient = rs.getString(1);
+                }
+                if (retailClient.equals("N"))
+                {
+                    udTCValidationData.addAttribute("10001115", "");
+                    udTCValidationData.addAttribute("10001178", "");
+                    udTCValidationData.addAttribute("50002002", "");
+                    udTCValidationData.addAttributeToDisable("10001115");
+                    udTCValidationData.addAttributeToDisable("10001178");
+                    udTCValidationData.addAttributeToDisable("50002002");
+                }
+                if ("Y".equals(retailClient))
+                {
+                    udTCValidationData.addAttributeToEnable("10001115");
+                    udTCValidationData.addAttributeToEnable("10001178");
+                    udTCValidationData.addAttributeToEnable("50002002");
+                    udTCValidationData.addMandatoryType("10001115", "true");
+                    udTCValidationData.addMandatoryType("10001178", "true");
+                    udTCValidationData.addMandatoryType("50002002", "true");
+                    udTCValidationData.addAttribute("10001115", "");
+                    udTCValidationData.addAttribute("10001178", "");
+                    udTCValidationData.addAttribute("50002002", "");
+                }
+                log.debug("Inside Validation of Drawee Branch Code having attribute id : 50000246");
+                String dbcolValue = (String) ht.get("50000246");
+                String seekId = null;
+                String producttypeCode = null;
+                String clearing = (String) ht.get("50000537");
+                String bankBranchFlag = TCICache.getFromCache("BK_BR_FLAG").toString();
+                String draweeBranchCode = null;
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                pstmt = objConn.prepareStatement("select product_type_code from product_mst where product_code = ?");
+                pstmt.setString(1, productCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    producttypeCode = rs.getString(1);
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                if ("B".equals(bankBranchFlag))
+                {
+                    pstmt = objConn.prepareStatement("select drawee_branch_code,drawee_branch_description, "
+                                    + "drawee_bank_branch_mst.clearing_loc_code from drawee_bank_branch_mst "
+                                    + "where drawee_branch_code like ? and drawee_bank_code like ? and valid_flag = 'Y'");
+                    pstmt.setString(1, dbcolValue);
+                    pstmt.setString(2, (String) ht.get("50000244"));
+                }
+                else
+                {
+                    if (!"O".equals(producttypeCode))
+                    {
+                        pstmt = objConn.prepareStatement("select drawee_bank_branch_mst.drawee_branch_code, "
+                                        + "drawee_bank_branch_mst.drawee_branch_description, "
+                                        + "drawee_bank_branch_mst.clearing_loc_code from drawee_bank_branch_mst, "
+                                        + "adhoc_dispatch_bank_txn b where drawee_bank_branch_mst.drawee_branch_code like ? "
+                                        + "and drawee_bank_branch_mst.drawee_bank_code like ? and b.adhoc_dispatch_bank_code (+) = "
+                                        + "drawee_bank_branch_mst.drawee_bank_code and b.adhoc_dispatch_branch_code (+) = "
+                                        + "drawee_bank_branch_mst.drawee_branch_code and "
+                                        + "(drawee_bank_branch_mst.clearing_loc_code is null or "
+                                        + "drawee_bank_branch_mst.clearing_loc_code = ? and (valid_flag = 'Y'))");
+                        pstmt.setString(1, dbcolValue);
+                        pstmt.setString(2, (String) ht.get("50000244"));
+                        pstmt.setString(3, clearing);
+                    }
+                    else
+                    {
+                        pstmt = objConn.prepareStatement("select drawee_bank_branch_mst.drawee_branch_code, "
+                                        + "drawee_bank_branch_mst.drawee_branch_description, "
+                                        + "drawee_bank_branch_mst.clearing_loc_code from drawee_bank_branch_mst, "
+                                        + "adhoc_dispatch_bank_txn b where drawee_bank_branch_mst.drawee_branch_code like ? "
+                                        + "and drawee_bank_branch_mst.drawee_bank_code like ? and b.adhoc_dispatch_bank_code (+) "
+                                        + "= drawee_bank_branch_mst.drawee_bank_code and b.adhoc_dispatch_branch_code (+) "
+                                        + "= drawee_bank_branch_mst.drawee_branch_code and "
+                                        + "(drawee_bank_branch_mst.clearing_loc_code is null or "
+                                        + "drawee_bank_branch_mst.clearing_loc_code in (select clearing_loc_code "
+                                        + "from product_drawnon_loc_mst where product_drawnon_loc_mst.product_code = ?  "
+                                        + "and product_drawnon_loc_mst.valid_flag = 'Y' )) and (valid_flag = 'Y')");
+                        pstmt.setString(1, dbcolValue);
+                        pstmt.setString(2, (String) ht.get("50000244"));
+                        pstmt.setString(3, productCode);
+                    }
+                }
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    log.debug("Valid Drawee Branch Code");
+                    String draweeBranchDescription = rs.getString(2);
+                    udTCValidationData.addAttribute("drawee_branch_description", draweeBranchDescription);
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                    draweeBranchCode = rs.getString(1);
+                }
+                else
+                {
+                    log.debug("InValid Drawee Branch Code");
+                    String strAhdrbkdrbr = TCICache.getFromCache("AHDRBKDRBR").toString();
+                    if (strAhdrbkdrbr.equalsIgnoreCase("Y"))
+                    {
+                        udTCValidationData.addAttribute("50000246", dbcolValue);
+                        udTCValidationData.addErrorMessage("PDV301");
+                        return udTCValidationData;
+                    }
+                    else
+                    {
+                        udTCValidationData.addAttribute("50000246", "");
+                        udTCValidationData.addAttribute("drawee_bank_description", "");
+                        udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                        udTCValidationData.setExistential(false);
+                    }
+                }
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                log.debug("producttypeCode ::" + producttypeCode);
+                log.debug("clearing ::" + clearing);
+                log.debug("bank_branch_flag ::" + bankBranchFlag);
+                log.debug("productCode ::" + productCode);
+                ProcValidationGenerator pgb = new ProcValidationGenerator("TX02", "50000246", "A");
+                log.debug("Calling procedure dep_chk_drawee_branch");
+                ht.put("50000246", dbcolValue);
+                ht.put("10000501", productCode);
+                outPut = pgb.execute(ht, 1);
+                retVal = outPut.get("1001").toString().trim();
+                if (!"".equals(retVal))
+                {
+                    procName = (String) ht.get("procName");
+                    log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                    udTCValidationData.addAttribute("10002487", "");
+                    udTCValidationData.addAttribute("50000244", "");
+                    udTCValidationData.addAttribute("drawee_bank_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    udTCValidationData.addAttribute("50000246", "");
+                    udTCValidationData.addAttribute("drawee_branch_description", "");
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                    if ("D".equals(retVal))
+                    {
+                        udTCValidationData.addErrorMessage("TX0241");
+                        return udTCValidationData;
+                    }
+                    if (!"PDV301".equals(retVal))
+                    {
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    if ("PDV301".equals(retVal))
+                    {
+                        udTCValidationData.addAttribute("50000246", dbcolValue);
+                        udTCValidationData.addAttribute("drawee_branch_description", outPut.get("1003").toString().trim());
+                        udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                        udTCValidationData.addErrorMessage(retVal);
+                        return udTCValidationData;
+                    }
+                    udTCValidationData.addErrorMessage(retVal);
+                    return udTCValidationData;
+                }
+                String clearingLocCode = (String) ht.get("50000127");
+                String primaryLocCode = (String) ht.get("50000537");
+                log.debug("clearingLocCode" + clearingLocCode);
+                log.debug("primaryLocCode" + primaryLocCode);
+                udTCValidationData.addAttribute("50000244", outPut.get("1006").toString().trim());
+                udTCValidationData.addAttribute("50000246", dbcolValue);
+                udTCValidationData.addAttributeToDisable("50000244");
+                udTCValidationData.addAttributeToDisable("50000246");
+                log.debug("productTypeCode" + productTypeCode);
+                if (("B".equals(productTypeCode)) || ("N".equals(productTypeCode)))
+                {
+                    udTCValidationData.addAttribute("50000127", primaryLocCode);
+                    udTCValidationData.addAttribute("50000537", primaryLocCode);
+                    udTCValidationData.addAttributeToDisable("50000127");
+                    udTCValidationData.addAttributeToDisable("seek_50000127");
+                }
+                else if ((!"O".equals(productTypeCode)) && (!"B".equals(productTypeCode)))
+                {
+                    udTCValidationData.addAttribute("50000537", primaryLocCode);
+                }
+                String routingCD = "000000000";
+                udTCValidationData.addAttribute("50000794", routingCD);
+                udTCValidationData.addAttributeToDisable("50000794");
+                try
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    pstmt = objConn.prepareStatement(
+                                    "SELECT NVL(high_value_branch,'N') FROM drawee_bank_branch_mst WHERE drawee_branch_code = ?");
+                    pstmt.setString(1, dbcolValue);
+                    rs = pstmt.executeQuery();
+                    String hvBranch = null;
+                    if (rs.next())
+                    {
+                        hvBranch = rs.getString(1);
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("TX0259");
+                        return udTCValidationData;
+                    }
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    pstmt = objConn.prepareStatement("select get_hv_req_flag(?,?) from dual");
+                    pstmt.setString(1, productCode);
+                    pstmt.setString(2, clearingLocCode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        hvFlag = (rs.getString(1)).trim();
+                        log.debug("After Execution of a function ::hvFlag " + hvFlag);
+                        log.debug("hvFlag :::::::" + hvFlag);
+                    }
+                    log.debug("mandate_code ::" + mandateCode);
+                    log.debug("drawer_code ::" + drawerCode);
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    pstmt = objConn.prepareStatement("SELECT internal_funds_transfer_flag FROM product_mst WHERE product_code = ?");
+                    pstmt.setString(1, productCode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        intnalFndTnfr = rs.getString(1);
+                    }
+                    String strDISPBRANCHCODE = null;
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                    if (intnalFndTnfr.equals("Y"))
+                    {
+                        pstmt = objConn.prepareStatement("SELECT DISP_BRANCH_CODE FROM dispatch_bank_branch_mst "
+                                        + "WHERE DISP_BANK_CODE = (SELECT DISP_BANK_CODE FROM dispatch_bank_mst "
+                                        + "WHERE BANK_TYPE_FLAG  ='S' and VALID_FLAG = 'Y') AND valid_flag = 'Y' "
+                                        + "AND DISP_BRANCH_CODE = ?");
+                        pstmt.setString(1, dbcolValue);
+                        rs = pstmt.executeQuery();
+                        if (rs.next())
+                        {
+                            strDISPBRANCHCODE = rs.getString(1);
+                        }
+                        else
+                        {
+                            udTCValidationData.addErrorMessage("TX02C6");
+                            return udTCValidationData;
+                        }
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error(Utilities.getStackTrace(e));
+                    log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal);
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("50000845"))
+            {
+                try
+                {
+                    String mandatecode = null;
+                    pstmt = objConn.prepareStatement("select mandate_code as Code ,benef_branch_code,benef_acct_nmbr "
+                                    + "from mandate_mst where mandate_code = ? ");
+                    mandatecode = (String) ht.get("50000845");
+                    pstmt.setString(1, mandatecode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        String draweeBranch = rs.getString(2);
+                        String accountNumber = rs.getString(3);
+                        udTCValidationData.addAttribute("10000615", draweeBranch);
+                        udTCValidationData.addAttribute("50000061", accountNumber);
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                        udTCValidationData.setExistential(true);
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("TXB139");
+                        udTCValidationData.addAttribute("50000845", "");
+                        udTCValidationData.addAttribute("10000615", "");
+                        udTCValidationData.addAttribute("50000061", "");
+                        udTCValidationData.setExistential(false);
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                    }
+                    String timeboundflag = null;
+                    String instDate = null;
+                    instDate = (String) ht.get("10000611");
+                    String[] instdt = instDate.split("/");
+                    instDate = instdt[2] + "-" + instdt[1] + "-" + instdt[0];
+                    java.sql.Date instdate = java.sql.Date.valueOf(instDate);
+                    String mandateCode = (String) ht.get("50000845");
+                    String drawerCode = (String) ht.get("50000250");
+                    String strClientCode = (String) ht.get("10000504");
+                    log.info("call instdt validation000000000");
+                    pstmt = objConn.prepareStatement("SELECT time_bound_flag,start_date,end_date FROM mandate_mst "
+                                    + "WHERE mandate_code = ? and client_code =? and drawer_code = ?");
+                    pstmt.setString(1, mandateCode);
+                    pstmt.setString(2, strClientCode);
+                    pstmt.setString(3, drawerCode);
+                    log.info("call instdt validation11111111");
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        timeboundflag = rs.getString(1);
+                        Date startdate = rs.getDate(2);
+                        Date enddate = rs.getDate(3);
+                        log.info("timeboundflag-------->" + timeboundflag);
+                        log.info("startdate-------->" + startdate);
+                        log.info("enddate-------->" + enddate);
+                        if (timeboundflag.equals("Y"))
+                        {
+                            log.info("call instdt validation222222");
+                            if (instdate.compareTo(startdate) < 0 || instdate.compareTo(enddate) > 0)
+                            {
+                                log.info("call instdt validation333333");
+                                udTCValidationData.addErrorMessage("TX02114");
+                                udTCValidationData.addAttribute("10000611", "");
+                                udTCValidationData.setExistential(false);
+                            }
+                            else
+                            {
+                                log.info("call instdt validation4444444");
+                                udTCValidationData.setExistential(true);
+                            }
+                        }
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error(Utilities.getStackTrace(e));
+                    udTCValidationData.setExistential(false);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("10000615"))
+            {
+                try
+                {
+                    String draweebranch = (String) ht.get("10000615");
+                    pstmt = objConn.prepareStatement("select  client_drawer_bene_acc_mst.benef_branch_code as Cod "
+                                    + "from client_drawer_bene_acc_mst, drawee_bank_branch_mst "
+                                    + "where drawee_bank_branch_mst.drawee_branch_code = client_drawer_bene_acc_mst.benef_branch_code "
+                                    + "and client_drawer_bene_acc_mst.benef_branch_code = ? ");
+                    pstmt.setString(1, draweebranch);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                        udTCValidationData.setExistential(true);
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("TXB140");
+                        udTCValidationData.addAttribute("10000615", "");
+                        udTCValidationData.setExistential(false);
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error(Utilities.getStackTrace(e));
+                    udTCValidationData.setExistential(false);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("50000061"))
+            {
+                try
+                {
+                    String accountnumber = null;
+                    String draweebranch = (String) ht.get("10000615");
+                    String clientcode = (String) ht.get("10000504");
+                    String drawer = (String) ht.get("50000250");
+                    String bankcode = (String) ht.get("50000244");
+                    String payloc = (String) ht.get("50000127");
+                    String benebranchcode = (String) ht.get("10000615");
+                    pstmt = objConn.prepareStatement("select benef_acct_nmbr as Code from client_drawer_bene_acc_mst a,"
+                                    + " drawee_bank_mst b, clearing_location_mst c, drawee_bank_branch_mst d where a.benef_bank_code"
+                                    + " = b.drawee_bank_code and a.benef_payment_loc = c.clearing_loc_code and a.benef_branch_code ="
+                                    + " d.drawee_branch_code   and a.benef_acct_nmbr like ? and a.client_code like ?  and a.drawer_code like"
+                                    + " ? and a.benef_bank_code like ? and a.benef_payment_loc like ? and  a.benef_branch_code like ? ");
+                    accountnumber = (String) ht.get("50000061");
+                    pstmt.setString(1, accountnumber);
+                    pstmt.setString(2, clientcode);
+                    pstmt.setString(3, drawer);
+                    pstmt.setString(4, bankcode);
+                    pstmt.setString(5, payloc);
+                    pstmt.setString(6, benebranchcode);
+                    rs = pstmt.executeQuery();
+                    if (rs.next())
+                    {
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                        udTCValidationData.setExistential(true);
+                    }
+                    else
+                    {
+                        udTCValidationData.addErrorMessage("TXB141");
+                        udTCValidationData.addAttribute("50000061", "");
+                        udTCValidationData.setExistential(false);
+                        udTCValidationData.setStrStatus(TCConstants.TRUE);
+                    }
+                }
+                catch (SQLException e)
+                {
+                    log.error(Utilities.getStackTrace(e));
+                    udTCValidationData.setExistential(false);
+                    udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+                }
+                finally
+                {
+                    com.cashtech.centaur.utils.Utilities.doClose(rs);
+                    com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("50000085"))
+            {
+                log.info("Validations for ccy code ...");
+                String ccycode = (String) ht.get("50000085");
+                log.info("ccy code :: " + ccycode);
+                log.info("Product code :: " + productCode);
+                pstmt = objConn.prepareStatement("select a.ccy_code as Code, a.ccy_description as Description "
+                                + " from currency_mst a ,product_mst b where a.ccy_code like ? and a.ccy_code=b.ccy_code "
+                                + " and b.product_code like ? and a.valid_flag = 'Y' ");
+                pstmt.setString(1, ccycode);
+                pstmt.setString(2, productCode);
+                rs = pstmt.executeQuery();
+                if (rs.next())
+                {
+                    udTCValidationData.setStrStatus(TCConstants.TRUE);
+                    udTCValidationData.setExistential(true);
+                }
+                else
+                {
+                    udTCValidationData.addErrorMessage("TXA214");
+                    udTCValidationData.addAttribute("50000085", "");
+                    udTCValidationData.setExistential(false);
+                    udTCValidationData.setStrStatus(TCConstants.TRUE);
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("10000640") && !"000000000".equals((String) ht.get("10000640")))
+            {
+                String cityCode = null;
+                String cityDesc = null;
+                String bankCode = null;
+                String bankDesc = null;
+                String branchCode = null;
+                String branchDesc = null;
+                log.info("Inside Validation of MicrCode  having attribute id : 10000640 " + strAttribute);
+                String colValue = String.valueOf(ht.get(strAttribute));
+                String micrCode = (String) ht.get("10000640");
+                String instNumbr = (String) ht.get("10000732");
+                String depoNmbr = (String) ht.get("10000723");
+                String paycolldetailFlag = (String) ht.get("paycolldetailFlag");
+                ProcValidationGenerator pg = new ProcValidationGenerator("TX02", "10000640", "A");
+                ht.put("10000640", colValue);
+                outPut = pg.execute(ht, 1);
+                log.info("After execution of p_micr_code proc and out put is::" + outPut.get("1001").toString().trim());
+                retVal = outPut.get("1001").toString().trim();
+                errMsg = outPut.get("1002").toString().trim();
+                cityCode = outPut.get("1008").toString().trim();
+                cityDesc = outPut.get("1007").toString().trim();
+                bankCode = outPut.get("1006").toString().trim();
+                bankDesc = outPut.get("1005").toString().trim();
+                branchCode = outPut.get("1004").toString().trim();
+                branchDesc = outPut.get("1003").toString().trim();
+                ht.put("50000244", bankCode);
+                log.info("cityCode::" + cityCode);
+                log.info("cityDesc::" + cityDesc);
+                log.info("bankCode::" + bankCode);
+                log.info("bankDesc::" + bankDesc);
+                log.info("branchCode::" + branchCode);
+                log.info("branchDesc::" + branchDesc);
+                log.info("retVal : " + retVal);
+                log.info("errMsg : " + errMsg);
+                if (!retVal.equals(""))
+                {
+                    if (retVal.equals("MC001") || retVal.equals("MC003") || retVal.equals("MC005"))
+                    {
+                        retVal = "MC007";
+                    }
+                    log.info("Inside if  having retval :" + retVal);
+                    log.info("Inside if  having errMsg :" + errMsg);
+                    procName = (String) ht.get("procName");
+                    log.error("Error while Executing Procedure " + procName + " ErrorCode = " + retVal + "ErrorMsg" + errMsg);
+                    udTCValidationData.addErrorMessage(retVal);
+                    if (!CommonUtils.isLocalOrLocalNonBankTxn(paycolldetailFlag))
+                    {
+                        udTCValidationData.addAttribute("50000127", cityCode);
+                        udTCValidationData.addAttribute("loc_description", cityDesc);
+                        udTCValidationData.addAttributeToDisable("loc_description");
+                    }
+                    udTCValidationData.addAttribute("10002487", bankCode);
+                    udTCValidationData.addAttribute("50000244", bankCode);
+                    udTCValidationData.addAttribute("drawee_bank_description", bankDesc);
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    udTCValidationData.addAttribute("50000246", branchCode);
+                    udTCValidationData.addAttribute("drawee_branch_description", branchDesc);
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                    handleRejectReasons(objConn, ht, udTCValidationData,false);
+                    return udTCValidationData;
+                }
+                else
+                {
+                    log.info("Inside else part");
+                    if (!CommonUtils.isLocalOrLocalNonBankTxn(paycolldetailFlag))
+                    {
+                        udTCValidationData.addAttribute("50000127", cityCode);
+                        udTCValidationData.addAttribute("loc_description", cityDesc);
+                        udTCValidationData.addAttributeToDisable("loc_description");
+                    }
+                    udTCValidationData.addAttribute("10002487", bankCode);
+                    udTCValidationData.addAttribute("50000244", bankCode);
+                    udTCValidationData.addAttribute("drawee_bank_description", bankDesc);
+                    udTCValidationData.addAttributeToDisable("drawee_bank_description");
+                    udTCValidationData.addAttribute("50000246", branchCode);
+                    udTCValidationData.addAttribute("drawee_branch_description", branchDesc);
+                    udTCValidationData.addAttributeToDisable("drawee_branch_description");
+                }
+                handleRejectReasons(objConn, ht, udTCValidationData,false);
+                if (instNumbr!=null)
+                {
+                    instDuplicateCheck(udTCValidationData,objConn,depoNmbr,bankCode,instNumbr,(String) ht.get("10000601"));
+                    String errorMsg = udTCValidationData.getStrErrorMessage();
+                    if(!errorMsg.equals(""))
+                    {
+                        return udTCValidationData;
+                    }
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("10001176"))
+            {
+                validateRejectReason(udTCValidationData, objConn, productCode, (String) ht.get("10001176"),
+                                (String) ht.get("50000805"));
+                if(errmsg=="TX02I03")
+                {
+                	errmsg=null;
+                	return udTCValidationData;
+                }
+            }
+            else if (strAttribute.equalsIgnoreCase("50000254"))
+            {
+                handleRejectReasons(objConn, ht, udTCValidationData,true);
+            }
+        }
+        catch (SQLException sqlEx)
+        {
+            txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+            log.error("XXXX99@SQLException occured during validate()  : " + sqlEx.getErrorCode() + " - "
+                            + Utilities.getStackTrace(sqlEx));
+            throw txnStatus;
+        }
+        catch (Exception except)
+        {
+            log.error("XXXX99@Exception occured in validate()  : " + except.getMessage() + " - " + Utilities.getStackTrace(except));
+            txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+            throw txnStatus;
+        }
+        finally
+        {
+            com.cashtech.centaur.utils.Utilities.doClose(rs);
+            com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+        }
+        log.debug("END :: validate()  ");
+        return udTCValidationData;
+    }
+
+    /**
+     * Validate Reject reason in master table
+     * 
+     * @param udTCValidationData The TCValidationData
+     * @param objConn The Connection
+     * @param rs The ResultSet
+     * @param productCode The Product Code
+     * @param rejectReason the Reject Reason
+     */
+    private void validateRejectReason(TCValidationData udTCValidationData, Connection conn, String productCode, String rejectReason,
+                    String sellerCode)
+    {
+        PreparedStatement cstmt = null;
+        ResultSet rs = null;
+        try
+        {
+            log.debug("Validation for 10001176 Reject reason");
+            StringBuilder strQuery = new StringBuilder(512);
+            strQuery.append("select reason_code , reason_description from liquidation_reason_mst where REASON_TYPE = 'J' and ");
+            strQuery.append("valid_flag = 'Y' and  product_code IN (?, '(DEFAULT)') and ");
+            strQuery.append("upper (reason_code) = upper(?) AND seller_Code = ? ");
+            cstmt = conn.prepareStatement(strQuery.toString());
+            cstmt.setString(1, productCode);
+            cstmt.setString(2, rejectReason);
+            cstmt.setString(3, sellerCode);
+            rs = cstmt.executeQuery();
+            if (rs.next())
+            {
+                udTCValidationData.addAttribute("10001176", rs.getString("reason_code"));
+                udTCValidationData.addAttribute("reason_description", rs.getString("reason_description"));
+                udTCValidationData.addAttributeToDisable("reason_description");
+            }
+            else
+            {
+                errmsg="TX02I03";
+                udTCValidationData.addErrorMessage("TX02I03");
+                udTCValidationData.addAttribute("10001176", "");
+                udTCValidationData.addAttribute("reason_description", "");
+                udTCValidationData.addAttributeToDisable("reason_description");
+            }
+        }
+        catch (SQLException e)
+        {
+            log.error(Utilities.getStackTrace(e));
+            udTCValidationData.setExistential(false);
+            udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+        }
+        catch (Exception e1)
+        {
+            log.error(Utilities.getStackTrace(e1));
+            udTCValidationData.setExistential(false);
+            udTCValidationData.addErrorMessage("G00002 Database Error Contact Admin.");
+        }
+        finally
+        {
+            com.cashtech.centaur.utils.Utilities.doClose(rs);
+            com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+        }
+    }
+
+    /**
+     * Validate bank Suspension
+     * 
+     * @param  udTCValidationData The TCValidationData
+     * @param  objConn            The Connection
+     * @param  strDraweeBankCode  The Drawee Bank Code
+     * @param  primaryLocation    The Clearing Location
+     * @throws TxnStatus
+     * 
+     */
+    private void bankSuspendValidation(TCValidationData udTCValidationData, Connection objConn,
+                    String strDraweeBankCode, String primaryLocation,boolean showErr, boolean isManuallyRejected, String productCode) throws TxnStatus
+    {
+        ResultSet rs = null;
+        PreparedStatement pstmt = null;
+        try
+        {
+            String reasonCode = "";
+            String validFlag = "N";
+            String disableFlag = "N";
+            pstmt = objConn.prepareStatement(
+                            "select valid_flag, disable_flag from drawee_bank_suspension_mst where drawee_bank_code = ?");
+            pstmt.setString(1, strDraweeBankCode);
+            rs = pstmt.executeQuery();
+            if (rs.next())
+            {
+                validFlag = rs.getString("valid_flag");
+                disableFlag = rs.getString("disable_flag");
+            }
+            com.cashtech.centaur.utils.Utilities.doClose(rs);
+            com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+            if ("Y".equals(validFlag))
+            {
+                if ("Y".equals(disableFlag))
+                {
+                    reasonCode = "RJ001";
+                }
+                else
+                {
+                    pstmt = objConn.prepareStatement(
+                                    "select count(1) from drawee_bank_suspension_dtl where drawee_bank_code = ? and clearing_loc_code=?");
+                    pstmt.setString(1, strDraweeBankCode);
+                    pstmt.setString(2, primaryLocation);
+                    rs = pstmt.executeQuery();
+                    if (rs.next() && 0 < rs.getInt(1))
+                    {
+                        reasonCode = "RJ002";
+                    }
+                }
+            }
+            populateDataEntryRejectInfo(objConn, reasonCode, "", udTCValidationData,showErr,isManuallyRejected,productCode);
+        }
+        catch (Exception except)
+        {
+            log.error("XXXX99@Exception occured in bankSuspendValidation()  : " + except.getMessage() + " - "
+                            + Utilities.getStackTrace(except));
+            txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+            throw txnStatus;
+        }
+        finally
+        {
+            com.cashtech.centaur.utils.Utilities.doClose(rs);
+            com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+        }
+    }
+
+    /**
+     * Get Reject reason Description
+     * 
+     * @param objConn The Connection
+     * @param rejectReasonCode The Reject Reason Code
+     * @param sellerCode The Seller Code
+     * @return reason description based on reason code
+     * @throws TxnStatus
+     */
+    private String getRejectReasonDesc(Connection objConn, String rejectReasonCode, String sellerCode, String productCode) throws TxnStatus
+    {
+        String rejectReasonDesc = null;
+        ResultSet rs = null;
+        PreparedStatement pstmt = null;
+        try
+        {
+            StringBuilder sb = new StringBuilder(512);
+            sb.append("select reason_description from liquidation_reason_mst m where m.REASON_TYPE = 'J' and ");
+            sb.append("m.valid_flag = 'Y' and m.product_code = decode((SELECT COUNT(1) FROM liquidation_reason_mst t " + 
+                            "WHERE t.product_code = ? AND t.reason_type='J'AND t.seller_code = ? " + 
+                            "AND t.valid_flag = 'Y' AND t.reason_code = m.reason_code), 0, '(DEFAULT)', ?) and m.reason_code = ?  AND m.seller_Code = ? ");
+            pstmt = objConn.prepareStatement(sb.toString());
+            pstmt.setString(1, productCode);
+            pstmt.setString(2, sellerCode);
+            pstmt.setString(3, productCode);
+            pstmt.setString(4, rejectReasonCode);
+            pstmt.setString(5, sellerCode);
+            rs = pstmt.executeQuery();
+            if (rs.next())
+            {
+                rejectReasonDesc = rs.getString("reason_description");
+            }
+        }
+        catch (Exception except)
+        {
+            log.error("XXXX99@Exception occured in getRejectReasonDesc()  : " + except.getMessage() + " - "
+                            + Utilities.getStackTrace(except));
+            txnStatus.addErrMessage("G00002 Database Error Contact Admin.");
+            throw txnStatus;
+        }
+        finally
+        {
+            com.cashtech.centaur.utils.Utilities.doClose(rs);
+            com.cashtech.centaur.utils.Utilities.doClose(pstmt);
+        }
+        return rejectReasonDesc;
+    }
+
+    private String getValueFromRequestMap(String strControlName)
+    {
+        String fieldValue = null;
+        Object value = null;
+        if (this.requestMap.get(strControlName) == null)
+        {
+            return "";
+        }
+        else
+        {
+            value = this.requestMap.get(strControlName);
+        }
+        if (value != null)
+        {
+            // log.debug("value not null");
+            if (value instanceof String)
+            {
+                fieldValue = (String) value;
+            }
+            else if (value instanceof String[])
+            {
+                fieldValue = ((String[]) value)[0];
+            }
+            // log.debug("fieldValue is " + fieldValue);
+        }
+        return fieldValue;
+    }
+
+    public static String replace(String source, String pattern, String replace)
+    {
+        if (source != null)
+        {
+            final int len = pattern.length();
+            StringBuilder sb = new StringBuilder();
+            int found = -1;
+            int start = 0;
+
+            if ((found = source.indexOf(pattern, start)) != -1)
+            {
+                sb.append(source.substring(start, found));
+                sb.append(replace);
+                start = found + len;
+            }
+
+            sb.append(source.substring(start));
+
+            return sb.toString();
+        }
+        else
+            return "";
+    }
+
+    private void callChkSpecialCharacter(Connection conn, String depositNmbr, String strInternalTranscationNmbr) throws TxnStatus
+    {
+        DepositDetailBean depositDetailBean = new DepositDetailBean();
+        DepositDetailBean depositDetailBeanRet = null;
+        ResultSet rs = null;
+        PreparedStatement pstmt = null;
+        CallableStatement cstmt = null;
+        String strDepositInstrumentNmbr = null;
+        String errCode = null;
+        String errMsg = null;
+        strDepositInstrumentNmbr = depositNmbr + strInternalTranscationNmbr;
+        try
+        {
+            objTypeMap = conn.getTypeMap();
+            objTypeMap.put(depositDetailBean._SQL_NAME, DepositDetailBean.class);
+            cstmt = conn.prepareCall("{call pkg_dep_validations.p_chk_special_char(?,?,?,?,?,?,?,?,?)}");
+            cstmt.setObject(1, depositDetailBean, OracleTypes.STRUCT);
+            cstmt.setString(2, null);
+            cstmt.setString(3, "TCI");
+            cstmt.setString(4, "COLL");
+            cstmt.setString(5, "TCI");
+            cstmt.setString(6, "BDE");
+            cstmt.setString(7, strDepositInstrumentNmbr);
+            cstmt.registerOutParameter(1, OracleTypes.STRUCT, depositDetailBean._SQL_NAME);
+            cstmt.registerOutParameter(8, java.sql.Types.VARCHAR);
+            cstmt.registerOutParameter(9, java.sql.Types.VARCHAR);
+            cstmt.execute();
+            depositDetailBeanRet = (DepositDetailBean) cstmt.getObject(1, objTypeMap);
+            errCode = cstmt.getString(8);
+            errMsg = cstmt.getString(9);
+            log.info("error code " + errCode);
+            log.info("errMsg " + errMsg);
+            if (errMsg != null && errCode != null)
+            {
+                log.error("Error while Executing Procedure pkg_dep_validations.p_chk_special_char ErrorCode = " + errCode);
+                log.error("Error while Executing Procedure pkg_dep_validations.p_chk_special_char ErrorMsg = " + errMsg);
+                txnStatus.addErrMessage("TX0134@" + errMsg + " ");
+                throw txnStatus;
+            }
+            log.debug("procedure pkg_dep_validations.p_chk_special_char executed Sucessfully");
+        }
+        catch (SQLException se)
+        {
+            log.error("SQL exception occurred " + Utilities.getStackTrace(se));
+            throw txnStatus;
+        }
+        catch (Exception se)
+        {
+            log.error("Exception occurred " + Utilities.getStackTrace(se));
+            throw txnStatus;
+        }
+        finally
+        {
+            com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+        }
+    }
+
+    public String callValidateCardRate(Connection conn, String strAccCCY, String strTxnCCY, String strSellerCode)
+    {
+        CallableStatement callStmt = null;
+        String retval = null;
+        try
+        {
+            callStmt = conn.prepareCall("{call forex.p_validate_card_rate(?,?,?,?,?,?,?,?)}");
+            callStmt.setString(1, strAccCCY);
+            callStmt.setString(2, strTxnCCY);
+            callStmt.setString(3, strSellerCode);
+            callStmt.setString(4, "B");
+            callStmt.registerOutParameter(5, Types.VARCHAR);
+            callStmt.registerOutParameter(6, Types.VARCHAR);
+            callStmt.registerOutParameter(7, Types.VARCHAR);
+            callStmt.registerOutParameter(8, Types.VARCHAR);
+            callStmt.execute();
+            String povSuspendedRate = callStmt.getString(5);
+            String povRetVal = callStmt.getString(7);
+            String povErrmsg = callStmt.getString(8);
+            if (povSuspendedRate.equalsIgnoreCase("Y"))
+            {
+                retval = "TX0563";
+            }
+            if (povRetVal != null)
+            {
+                log.error("Error while Executing Procedure callValidateCardRate ErrorCode = " + povRetVal);
+                retval = povRetVal;
+            }
+        }
+        catch (SQLException e)
+        {
+            log.error("Exception occured in  callValidateCardRate() OriginateUdeDepositDetailRequestBO "
+                            + Utilities.getStackTrace(e));
+            return "G00002 System Error Contact Admin.";
+        }
+        finally
+        {
+            com.cashtech.centaur.utils.Utilities.doClose(callStmt);
+        }
+        return retval;
+    }
+
+    /**
+     * Validate instrument Date
+     * 
+     * @param  ht                 The Hashtable
+     * @param  udTCValidationData the TCValidationData
+     * @param  objConn            the Connection
+     * @param  productCode        The Product Code
+     * @return                    the udTCValidationData
+     * @throws TxnStatus
+     */
+    private TCValidationData validateInstDate(Hashtable ht, TCValidationData udTCValidationData, Connection objConn,
+                    String productCode,boolean showErr) throws TxnStatus
+    {
+        log.debug("Sart::Instrument Date Validation");
+        String pstrFmt = "dd/MM/yyyy";
+        String[] phyCollInstIds = { "10", "11", "15" };
+        try
+        {
+            String depno = (String) ht.get("10000723");
+            String strApplDt = TCICache.getFromCache("APPLDATE").toString();
+            Date appldt = DateUtils.str2UtilDate(strApplDt, pstrFmt);
+            String strInstDt = (String) ht.get("d10000611");
+            if (StringUtils.isEmpty(strInstDt))
+            {
+                strInstDt = (String) ht.get("10000611");
+            }
+            Date instDt = DateUtils.str2UtilDate(strInstDt, pstrFmt);
+            log.debug("appldt :::" + appldt + " instDt :::: " + instDt);
+            String strInstId = DenominationEnrichmentUtils.getPayCollDetail(objConn, productCode);
+            Timestamp tsActivationDate = getActivationDate(objConn, depno);
+            String strActivationDate = DateUtils.sqlTimeStamp2Str(tsActivationDate, pstrFmt);
+            Date dtActivationDate = DateUtils.str2UtilDate(strActivationDate, pstrFmt);
+            if (CommonUtils.isCashTxn(strInstId) && !dtActivationDate.equals(instDt))
+            {
+                udTCValidationData.addErrorMessage("TX02I05");
+                udTCValidationData.addAttribute("d10000611", strActivationDate);
+            }
+            else if (Arrays.asList(phyCollInstIds).contains(strInstId))
+            {
+                String instValueDays = "7";
+                try
+                {
+                    instValueDays = TCICache.getFromCache("INSTVLDDAY").toString();
+                }
+                catch (Exception e)
+                {
+                    log.error("INSTVLDDAY parameter is not configured!");
+                }
+                validateFutureInstDate(ht, udTCValidationData, objConn, pstrFmt, appldt, instDt, instValueDays, showErr);
+            }
+        }
+        catch (Exception e)
+        {
+            log.error(Utilities.getStackTrace(e));
+        }
+        log.debug("End::Instrument Date Validation");
+        return udTCValidationData;
+    }
+
+    /**
+     * validate future instrument date
+     * 
+     * @param ht The hashtable
+     * @param udTCValidationData The TCValidationData
+     * @param objConn The Connection
+     * @param pstrFmt The prepared String
+     * @param appldt The application date
+     * @param instDt The instrument date
+     * @param instValueDays The Instrument Value days
+     * @throws TxnStatus
+     */
+    private void validateFutureInstDate(Hashtable ht, TCValidationData udTCValidationData, Connection objConn, String pstrFmt,
+                    Date appldt, Date instDt, String instValueDays, boolean showErr) throws TxnStatus
+    {
+    	String depno = (String) ht.get("10000723");
+        String instDtStr = DateUtils.utilDate2Str(instDt, pstrFmt);
+        Timestamp activationDate = getActivationDate(objConn, depno);
+        String activation = DateUtils.sqlTimeStamp2Str(activationDate, pstrFmt);
+        Date activationDt = DateUtils.str2UtilDate(activation, pstrFmt);
+        boolean isManuallyRejected = isManuallyRejected(ht);
+        if (activationDt != null && instDt.after(activationDt))
+        {
+            udTCValidationData.addErrorMessage("TX0220");
+            udTCValidationData.addAttribute("d10000611", instDtStr);
+        }
+        else
+        {
+            Map<String, String> map = CommonUtils.handleInstDtValidation(activationDt, instDt, instValueDays);
+            int result = Integer.parseInt(map.get("RESULT"));
+            if (result == -1)
+            {
+                handleStalesaveValidation(udTCValidationData, objConn, appldt, map, pstrFmt, showErr, isManuallyRejected);
+            }
+            else
+            {
+                bankSuspendValidation(udTCValidationData, objConn, (String) ht.get("50000244"),
+                                (ht.get("50000537").toString()).trim(), showErr, isManuallyRejected,(String) ht.get("10000501"));
+            }
+        }
+    }
+ private void handleStalesaveValidation(TCValidationData udTCValidationData, Connection objConn, Date appldt,
+                    Map<String, String> map, String pstrFmt,boolean showErr,boolean isManuallyRejected) throws TxnStatus
+    {
+        String stalesave = TCICache.getFromCache("STALESAVE").toString();
+        if (stalesave.equalsIgnoreCase("N"))
+        {
+            udTCValidationData.addErrorMessage("TX0264" + "@" + map.get("PERIOD_VALUE") + "$" + map.get("PERIOD_TYPE") + "$");
+            String defautInstDate = DateUtils.utilDate2Str(appldt, pstrFmt);
+            String instrumentDateFlag = OrionPropertiesProvider.getOrionProperty("INSTRUMENT_DATE_FLAG");
+            if (instrumentDateFlag == null || "Y".equals(instrumentDateFlag))
+            {
+                udTCValidationData.addAttribute("d10000611", defautInstDate);
+            }
+            else
+            {
+                udTCValidationData.addAttribute("d10000611", "00/00/0000");
+            }
+            populateDataEntryRejectInfo(objConn, "","TX0264", udTCValidationData,showErr,isManuallyRejected,"");
+        }
+        else if (stalesave.equalsIgnoreCase("Y"))
+        {
+            populateDataEntryRejectInfo(objConn, "RJ003", "", udTCValidationData,showErr,isManuallyRejected,"");
+        }
+    }
+ private void instDuplicateCheck(TCValidationData udTCValidationData, Connection objConn, String depoNmbr,
+                    String strDraweeBankCode, String instNumbr, String strInternalTxnNo) throws TxnStatus
+    {
+        PreparedStatement cstmt = null;
+        ResultSet rs = null;
+        StringBuilder sbSQL = null;
+        int i = 0;
+        if(instNumbr != null)
+        {
+            try
+            {
+                sbSQL = new StringBuilder();
+                sbSQL.append("select count(1) from deposit_detail_txn t ");
+                sbSQL.append("where t.deposit_nmbr=? and t.drawee_bank_code=? and t.instrument_nmbr=? ");
+                if (!strInternalTxnNo.equals(""))
+                {
+                    sbSQL.append("and t.internal_transaction_nmbr<>?");
+                }
+                cstmt = objConn.prepareStatement(sbSQL.toString());
+                cstmt.setString(++i, depoNmbr);
+                cstmt.setString(++i, strDraweeBankCode);
+                cstmt.setString(++i, instNumbr);
+                if (!strInternalTxnNo.equals(""))
+                {
+                    cstmt.setString(++i, strInternalTxnNo);
+                }
+                rs = cstmt.executeQuery();
+                if (rs.next() && rs.getInt(1) !=0 )
+                {
+                    udTCValidationData.addErrorMessage("TX0208");
+                }
+            }
+            catch (SQLException e)
+            {
+                e.printStackTrace();
+            }
+            finally
+            {
+                com.cashtech.centaur.utils.Utilities.doClose(rs);
+                com.cashtech.centaur.utils.Utilities.doClose(cstmt);
+            }
+        }
+    }
+}
